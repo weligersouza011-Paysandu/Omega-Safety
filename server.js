@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const express      = require('express');
 const session      = require('express-session');
+const sqlite3      = require('sqlite3');
 const SQLiteStore  = require('connect-sqlite3')(session);
 const path         = require('path');
 const cors         = require('cors');
@@ -19,8 +20,9 @@ app.use(express.urlencoded({ extended: true }));
 // Sessões persistidas no SQLite
 app.use(session({
     store: new SQLiteStore({
-        db:  'sessions.db',
-        dir: path.join(__dirname, 'database'),
+        sqlite3:           sqlite3,
+        db:                'sessions.db',
+        dir:               path.join(__dirname, 'database'),
     }),
     secret:            process.env.SESSION_SECRET || 'omega_safety_secret',
     resave:            false,
