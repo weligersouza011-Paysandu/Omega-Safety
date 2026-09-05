@@ -1,0 +1,81 @@
+/* =====================================================
+   OMEGA SAFETY — Design Tokens (variables.css)
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+    /* ── Cores Primárias ── */
+    --color-bg-primary:    #0d0d0d;
+    --color-bg-secondary:  #161616;
+    --color-bg-card:       #1e1e1e;
+    --color-bg-hover:      #252525;
+    --color-bg-input:      #1a1a1a;
+
+    /* ── Acento Omega (Vinho / Bordô) ── */
+    --color-red-primary:   #8B1C31;
+    --color-red-hover:     #A6223B;
+    --color-red-soft:      rgba(139, 28, 49, 0.15);
+    --color-red-border:    rgba(139, 28, 49, 0.4);
+
+    /* ── Texto ── */
+    --color-text-primary:  #f0f0f0;
+    --color-text-secondary:#a0a0a0;
+    --color-text-muted:    #666;
+    --color-text-inverse:  #0d0d0d;
+
+    /* ── Bordas ── */
+    --color-border:        #2a2a2a;
+    --color-border-focus:  #C8102E;
+
+    /* ── Status Colors ── */
+    --color-status-analise:  #f59e0b;   /* Amarelo — Em Análise */
+    --color-status-aprovado: #22c55e;   /* Verde   — Aprovado */
+    --color-status-reprovado:#ef4444;   /* Vermelho — Reprovado */
+    --color-status-pendente: #a855f7;   /* Roxo    — Pendente */
+    --color-status-concluido:#3b82f6;   /* Azul    — Concluído */
+
+    /* ── Training Status ── */
+    --color-training-ok:     #22c55e;
+    --color-training-alerta: #f59e0b;
+    --color-training-vencido:#ef4444;
+
+    /* ── Espaçamento ── */
+    --space-xs:   4px;
+    --space-sm:   8px;
+    --space-md:   16px;
+    --space-lg:   24px;
+    --space-xl:   32px;
+    --space-2xl:  48px;
+
+    /* ── Tipografia ── */
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-size-xs:   11px;
+    --font-size-sm:   13px;
+    --font-size-base: 15px;
+    --font-size-lg:   18px;
+    --font-size-xl:   22px;
+    --font-size-2xl:  28px;
+    --font-size-3xl:  36px;
+
+    /* ── Bordas & Raios ── */
+    --radius-sm:  6px;
+    --radius-md:  10px;
+    --radius-lg:  16px;
+    --radius-xl:  24px;
+
+    /* ── Sombras ── */
+    --shadow-sm:  0 2px 8px rgba(0,0,0,0.4);
+    --shadow-md:  0 4px 20px rgba(0,0,0,0.5);
+    --shadow-lg:  0 8px 40px rgba(0,0,0,0.6);
+    --shadow-red: 0 4px 20px rgba(200,16,46,0.3);
+
+    /* ── Sidebar ── */
+    --sidebar-width: 230px;
+    --sidebar-collapsed: 64px;
+
+    /* ── Transições ── */
+    --transition-fast:   0.15s ease;
+    --transition-normal: 0.25s ease;
+    --transition-slow:   0.4s ease;
+}

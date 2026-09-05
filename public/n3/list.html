@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N3 — Omega Safety</title>
+    <meta name="description" content="Registro e consulta de N3 — Quase Acidentes e Condições Inseguras.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/n3.css">
+</head>
+<body>
+<div class="app-layout">
+    <div id="sidebar-root"></div>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1 class="page-header__title">N3 — Quase Acidentes</h1>
+                <p class="page-header__subtitle">Condições Inseguras e Quase Acidentes Evitados</p>
+            </div>
+            <div>
+                <a href="/n3/form.html" class="btn btn--primary" id="btn-novo-n3">
+                    + Novo N3
+                </a>
+            </div>
+        </header>
+
+        <div class="page-body">
+
+            <!-- Abas (visíveis apenas para ADM via JS) -->
+            <div class="n3-tabs" id="n3-tabs-container" style="display:none;">
+                <button class="n3-tab-btn active" data-tab="tab-registros" id="tab-btn-registros">📋 Registros / Rotina</button>
+                <button class="n3-tab-btn" data-tab="tab-dashboard-n3" id="tab-btn-dashboard">📊 Dashboard N3</button>
+            </div>
+
+            <!-- ════════ ABA 1: REGISTROS / ROTINA ════════ -->
+            <div id="tab-registros" class="n3-tab-content active">
+
+                <!-- Filtro de Contrato (ADM) -->
+                <div id="contract-filter-bar" class="n3-contract-filter" style="display:none;">
+                    <label for="select-contrato-n3" class="n3-contract-filter__label">📑 Contrato:</label>
+                    <select id="select-contrato-n3" class="form-select n3-contract-filter__select">
+                        <option value="">Todos os Contratos</option>
+                    </select>
+                </div>
+
+                <!-- Filtros de Status -->
+                <div class="n3-list-header">
+                    <div class="n3-filters" id="filter-buttons" role="group" aria-label="Filtrar por status">
+                        <button class="filter-btn active" data-status="" id="filter-todos">Todos</button>
+                        <button class="filter-btn" data-status="Em Análise" id="filter-analise">⏳ Em Análise</button>
+                        <button class="filter-btn" data-status="Aprovado"   id="filter-aprovado">✅ Aprovados</button>
+                        <button class="filter-btn" data-status="Reprovado"  id="filter-reprovado">❌ Reprovados</button>
+                        <button class="filter-btn" data-status="Concluído"  id="filter-concluido">🏁 Concluídos</button>
+                    </div>
+                    <div style="font-size:var(--font-size-sm); color:var(--color-text-muted)">
+                        <span id="total-label">Carregando...</span>
+                    </div>
+                </div>
+
+                <!-- Container de Cards Agrupados por Data -->
+                <div id="n3-grid-container">
+                    <!-- Injetado por JS: grupos de data + cards -->
+                </div>
+
+            </div>
+
+            <!-- ════════ ABA 2: DASHBOARD N3 (ADM) ════════ -->
+            <div id="tab-dashboard-n3" class="n3-tab-content" style="display:none;">
+
+                <!-- Filtro de Contrato do Dashboard -->
+                <div class="n3-contract-filter" id="dashboard-contract-filter-bar">
+                    <label for="select-contrato-dashboard" class="n3-contract-filter__label">📑 Contrato:</label>
+                    <select id="select-contrato-dashboard" class="form-select n3-contract-filter__select">
+                        <option value="">Todos os Contratos</option>
+                    </select>
+                </div>
+
+                <!-- Cards de Resumo -->
+                <div class="n3-dashboard-cards">
+                    <div class="n3-dash-card">
+                        <div class="n3-dash-card__icon" style="background:rgba(245,158,11,0.1);color:#f59e0b;">⏳</div>
+                        <div>
+                            <div class="n3-dash-card__label">Em Análise</div>
+                            <div class="n3-dash-card__value" id="dash-em-analise">0</div>
+                        </div>
+                    </div>
+                    <div class="n3-dash-card">
+                        <div class="n3-dash-card__icon" style="background:rgba(34,197,94,0.1);color:#22c55e;">✅</div>
+                        <div>
+                            <div class="n3-dash-card__label">Aprovados</div>
+                            <div class="n3-dash-card__value" id="dash-aprovados">0</div>
+                        </div>
+                    </div>
+                    <div class="n3-dash-card">
+                        <div class="n3-dash-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444;">❌</div>
+                        <div>
+                            <div class="n3-dash-card__label">Reprovados</div>
+                            <div class="n3-dash-card__value" id="dash-reprovados">0</div>
+                        </div>
+                    </div>
+                    <div class="n3-dash-card">
+                        <div class="n3-dash-card__icon" style="background:rgba(99,102,241,0.1);color:#6366f1;">🏁</div>
+                        <div>
+                            <div class="n3-dash-card__label">Concluídos</div>
+                            <div class="n3-dash-card__value" id="dash-concluidos">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Área de Gráficos (preparada para futuras implementações) -->
+                <div class="n3-dashboard-charts">
+                    <div class="n3-dash-chart-placeholder">
+                        <div class="n3-dash-chart-placeholder__icon">📊</div>
+                        <div class="n3-dash-chart-placeholder__title">Evolução Mensal de N3</div>
+                        <div class="n3-dash-chart-placeholder__desc">Espaço reservado para o gráfico de evolução temporal.</div>
+                        <canvas id="chartN3Evolution" style="display:none;"></canvas>
+                    </div>
+                    <div class="n3-dash-chart-placeholder">
+                        <div class="n3-dash-chart-placeholder__icon">🏷️</div>
+                        <div class="n3-dash-chart-placeholder__title">Distribuição por Categoria</div>
+                        <div class="n3-dash-chart-placeholder__desc">Espaço reservado para o gráfico de categorias.</div>
+                        <canvas id="chartN3Categories" style="display:none;"></canvas>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- Modal de Detalhes / Validação ADM -->
+<div id="detail-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal" id="modal-content">
+        <div class="modal__title">
+            <span>⚠️</span>
+            <span id="modal-title">Detalhes do N3</span>
+        </div>
+        <div id="modal-body"><!-- injetado --></div>
+        <div class="form-actions" style="margin-top:var(--space-lg)">
+            <button class="btn btn--secondary" id="btn-fechar-modal">Fechar</button>
+            <!-- Botões ADM injetados por JS -->
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/n3-list.js"></script>
+</body>
+</html>

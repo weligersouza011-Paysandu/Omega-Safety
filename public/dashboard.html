@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Início — Omega Safety</title>
+    <meta name="description" content="Dashboard principal do Omega Safety — acesso rápido aos módulos de inspeção, N3 e treinamentos.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<div class="app-layout">
+
+    <!-- Sidebar (injetada por JS) -->
+    <div id="sidebar-root"></div>
+
+    <!-- Conteúdo Principal -->
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1 class="page-header__title" id="page-title">Início</h1>
+                <p class="page-header__subtitle" id="page-subtitle">Bem-vindo ao Omega Safety</p>
+            </div>
+            <div id="header-actions"></div>
+        </header>
+
+        <div class="page-body">
+
+            <!-- Saudação -->
+            <div class="welcome-section">
+                <div class="welcome-greeting">
+                    Olá, <span id="user-first-name">...</span> 👋
+                </div>
+                <div class="welcome-sub" id="user-role-label">Carregando...</div>
+                <div class="welcome-date" id="today-date"></div>
+            </div>
+
+            <!-- Stats ADM (visível apenas para ADM) -->
+            <div id="stats-section" class="stats-grid hidden">
+                <div class="stat-card">
+                    <div class="stat-card__value" id="stat-n3-analise">—</div>
+                    <div class="stat-card__label">N3 em Análise</div>
+                    <div class="stat-card__icon">⚠️</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card__value" id="stat-trein-vencidos">—</div>
+                    <div class="stat-card__label">Trein. Vencidos</div>
+                    <div class="stat-card__icon">📋</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card__value" id="stat-trein-alerta">—</div>
+                    <div class="stat-card__label">Vencem em 30d</div>
+                    <div class="stat-card__icon">⏰</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card__value" id="stat-inspecoes">—</div>
+                    <div class="stat-card__label">Inspeções Hoje</div>
+                    <div class="stat-card__icon">🔍</div>
+                </div>
+            </div>
+
+            <!-- Módulos de Acesso Rápido -->
+            <div class="module-grid">
+                <a href="/inspecoes" class="module-card" id="card-inspecoes" aria-label="Ir para Inspeções Avulsas">
+                    <div class="module-card__bg" style="background-image: url('/img/inspecao-bg.jpg'); background-color: #1a1a1a;"></div>
+                    <div class="module-card__overlay"></div>
+                    <div class="module-card__arrow">→</div>
+                    <div class="module-card__content">
+                        <span class="module-card__icon">🔍</span>
+                        <div class="module-card__title">Inspeções</div>
+                        <div class="module-card__desc">Registrar e visualizar inspeções avulsas</div>
+                    </div>
+                </a>
+
+                <a href="/n3" class="module-card" id="card-n3" aria-label="Ir para módulo N3">
+                    <div class="module-card__bg" style="background-image: url('/img/n3-bg.jpg'); background-color: #1a1a1a;"></div>
+                    <div class="module-card__overlay"></div>
+                    <div class="module-card__arrow">→</div>
+                    <div class="module-card__content">
+                        <span class="module-card__icon">⚠️</span>
+                        <div class="module-card__title">N3</div>
+                        <div class="module-card__desc">Quase Acidentes e Condições Inseguras</div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Painel de Treinamentos -->
+            <div class="trainings-panel">
+                <div class="trainings-panel__header">
+                    <div class="trainings-panel__title">
+                        <span class="icon">📋</span>
+                        <span>Meus Treinamentos</span>
+                    </div>
+                    <span class="trainings-count" id="trainings-count">0</span>
+                </div>
+
+                <!-- Cabeçalho da tabela -->
+                <div class="training-header">
+                    <span>Treinamento</span>
+                    <span>Situação</span>
+                    <span style="text-align:right">Vencimento</span>
+                </div>
+
+                <div class="trainings-panel__body" id="trainings-body">
+                    <div class="empty-state">
+                        <div class="empty-state__icon">⏳</div>
+                        <div class="empty-state__title">Carregando treinamentos...</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

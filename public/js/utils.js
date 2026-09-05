@@ -1,0 +1,378 @@
+// public/js/utils.js — Funções utilitárias compartilhadas
+
+// ── Toast Notifications ──────────────────────────────
+function showToast(message, type = 'success', duration = 4000) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const icons = { success: '✅', error: '❌', warning: '⚠️' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(40px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+// ── Formatação de Data ────────────────────────────────
+function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('pt-BR');
+}
+
+function formatDateTime(dtStr) {
+    if (!dtStr) return '—';
+    const d = new Date(dtStr);
+    return d.toLocaleString('pt-BR');
+}
+
+// Retorna quantos dias faltam para o vencimento (negativo = vencido)
+function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const alvo = new Date(dateStr + 'T00:00:00');
+    return Math.round((alvo - hoje) / (1000 * 60 * 60 * 24));
+}
+
+// ── Badge de Status N3 ───────────────────────────────
+function statusBadge(status) {
+    const map = {
+        'Em Análise': 'analise',
+        'Aprovado':   'aprovado',
+        'Reprovado':  'reprovado',
+        'Pendente':   'pendente',
+        'Concluído':  'concluido',
+    };
+    const cls = map[status] || 'analise';
+    return `<span class="badge badge--${cls}">${status}</span>`;
+}
+
+// ── Badge de Situação de Treinamento ────────────────
+function trainingBadge(situacao) {
+    const labels = { ok: 'Em dia', alerta: 'Vencendo', vencido: 'Vencido' };
+    return `<span class="badge badge--${situacao}">${labels[situacao] || situacao}</span>`;
+}
+
+// ── Iniciais para Avatar ─────────────────────────────
+function getInitials(nome = '') {
+    return nome.trim().split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(n => n[0].toUpperCase())
+        .join('');
+}
+
+// ── Guardar/Recuperar Sessão ─────────────────────────
+function saveSession(user) {
+    sessionStorage.setItem('omega_user', JSON.stringify(user));
+}
+
+function getSession() {
+    try {
+        return JSON.parse(sessionStorage.getItem('omega_user'));
+    } catch { return null; }
+}
+
+function clearSession() {
+    sessionStorage.removeItem('omega_user');
+}
+
+// ── Proteção de página (redireciona se não logado) ───
+async function requireLogin(role = null) {
+    try {
+        const user = await api.get('/auth/me');
+        saveSession(user);
+        if (role && user.perfil !== role) {
+            window.location.href = '/dashboard';
+            return null;
+        }
+        return user;
+    } catch {
+        clearSession();
+        window.location.href = '/';
+        return null;
+    }
+}
+
+// ── Construir sidebar HTML ───────────────────────────
+function buildSidebar(user, activePage) {
+    const isAdm = user.perfil === 'adm';
+    const navLinks = [
+        { href: '/dashboard', icon: '🏠', label: 'Início', key: 'dashboard' },
+        { href: '/inspecoes', icon: '🔍', label: 'Inspeções', key: 'inspecoes' },
+        { href: '/n3',   icon: '⚠️', label: 'N3',       key: 'n3' },
+    ];
+    if (isAdm) {
+        navLinks.push({ href: '/admin/treinamentos', icon: '📋', label: 'Treinamentos', key: 'treinamentos' });
+        navLinks.push({ href: '/admin/users',     icon: '👥', label: 'Gestão de Usuários', key: 'usuarios' });
+        navLinks.push({ href: '/admin/dashboard',   icon: '📊', label: 'Painel ADM',   key: 'adm' });
+    }
+
+    const links = navLinks.map(l => `
+        <a href="${l.href}" class="sidebar__link ${activePage === l.key ? 'active' : ''}">
+            <span class="icon">${l.icon}</span>
+            <span>${l.label}</span>
+        </a>
+    `).join('');
+
+    const gamificationBadge = user.foto_perfil 
+        ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">👑 Ouro</span>` 
+        : `<span class="badge badge--bronze" style="font-size:10px; margin-top:4px;">🥉 Bronze</span>`;
+        
+    const avatarHtml = user.foto_perfil
+        ? `<img src="${user.foto_perfil}" alt="Perfil" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
+        : getInitials(user.nome);
+
+    return `
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar__logo">
+                <img src="/Logo/logo.png" alt="Omega Safety Logo" class="sidebar-brand-logo" />
+                <div class="sidebar__logo-text">
+                    Omega Safety
+                    <span>Segurança do Trabalho</span>
+                </div>
+            </div>
+            <nav class="sidebar__nav">
+                <div class="sidebar__section-label">Navegação</div>
+                ${links}
+            </nav>
+            <div class="sidebar__user">
+                <div class="sidebar__user-info sidebar__user-info--clickable" id="btn-profile-modal-trigger" title="Visualizar Perfil e Gamificação">
+                    <div class="sidebar__avatar">
+                        ${avatarHtml}
+                    </div>
+                    <div>
+                        <div class="sidebar__user-name">${user.nome}</div>
+                        <div class="sidebar__user-mat">Mat. ${user.matricula} · ${isAdm ? 'ADM' : 'Op'}</div>
+                        ${gamificationBadge}
+                    </div>
+                </div>
+                <button class="btn-logout" id="btn-logout">
+                    <span>🚪</span><span>Sair</span>
+                </button>
+            </div>
+        </aside>
+    `;
+}
+
+// Inicia logout e modal de perfil
+async function initLogout() {
+    document.addEventListener('click', async e => {
+        if (e.target.closest('#btn-logout')) {
+            try {
+                await api.post('/auth/logout');
+            } finally {
+                clearSession();
+                window.location.href = '/';
+            }
+        }
+        
+        // Abre o modal de perfil ao clicar no card do usuário
+        if (e.target.closest('#btn-profile-modal-trigger')) {
+            const user = getSession();
+            if (user) {
+                ensureProfileModal(user);
+                document.getElementById('profile-modal-overlay').classList.add('active');
+            }
+        }
+    });
+
+    // Sincronização do DOM Local (Sidebar e cabeçalho na mesma página)
+    document.addEventListener('user-profile-updated', e => {
+        const updatedUser = e.detail;
+        
+        // Atualiza imagem na barra lateral
+        const avatarEl = document.querySelector('.sidebar__avatar');
+        if (avatarEl) {
+            const avatarHtml = updatedUser.foto_perfil
+                ? `<img src="${updatedUser.foto_perfil}" alt="Perfil" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
+                : getInitials(updatedUser.nome);
+            avatarEl.innerHTML = avatarHtml;
+        }
+
+        // Atualiza crachá/badge na barra lateral
+        const sidebarUser = document.querySelector('.sidebar__user-info');
+        if (sidebarUser) {
+            const badgeEl = sidebarUser.querySelector('.badge');
+            if (badgeEl) {
+                if (updatedUser.foto_perfil) {
+                    badgeEl.className = 'badge badge--gold';
+                    badgeEl.innerHTML = '👑 Ouro';
+                } else {
+                    badgeEl.className = 'badge badge--bronze';
+                    badgeEl.innerHTML = '🥉 Bronze';
+                }
+            }
+        }
+    });
+}
+
+// Função para injetar o modal flutuante de perfil
+function ensureProfileModal(user) {
+    let overlay = document.getElementById('profile-modal-overlay');
+    if (overlay) {
+        updateModalData(user);
+        return;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = 'profile-modal-overlay';
+    overlay.className = 'profile-modal-overlay';
+    
+    overlay.innerHTML = `
+        <div class="profile-modal">
+            <button class="profile-modal__close" id="btn-close-profile-modal">&times;</button>
+            
+            <div class="profile-modal__avatar-wrapper" id="btn-modal-avatar-click" title="Clique para escolher uma foto">
+                <img id="modal-profile-avatar" src="" alt="Avatar do Usuário" class="profile-modal__avatar">
+            </div>
+            
+            <h2 class="profile-modal__name" id="modal-profile-name"></h2>
+            <div class="profile-modal__meta" id="modal-profile-meta"></div>
+            
+            <div class="profile-modal__badge-container" id="modal-profile-badge-container"></div>
+            
+            <div class="profile-modal__actions">
+                <div class="profile-modal__preview-label" id="modal-preview-label">Pré-visualização da nova foto</div>
+                
+                <input type="file" id="input-modal-avatar" accept="image/*" style="display:none;">
+                <button class="btn btn--secondary" id="btn-select-photo">Escolher Foto</button>
+                <button class="btn btn--primary" id="btn-save-photo" style="display:none;">Salvar Foto</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    // Bind eventos de fechar
+    document.getElementById('btn-close-profile-modal').addEventListener('click', () => {
+        overlay.classList.remove('active');
+    });
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.classList.remove('active');
+        }
+    });
+
+    const fileInput = document.getElementById('input-modal-avatar');
+    const selectBtn = document.getElementById('btn-select-photo');
+    const saveBtn = document.getElementById('btn-save-photo');
+    const previewLabel = document.getElementById('modal-preview-label');
+    const avatarImg = document.getElementById('modal-profile-avatar');
+    const avatarWrapper = document.getElementById('btn-modal-avatar-click');
+    
+    const triggerFileSelect = () => fileInput.click();
+    selectBtn.addEventListener('click', triggerFileSelect);
+    avatarWrapper.addEventListener('click', triggerFileSelect);
+    
+    let selectedFile = null;
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        selectedFile = file;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            avatarImg.src = event.target.result;
+            previewLabel.classList.add('visible');
+            saveBtn.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        if (!selectedFile) return;
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff;margin-right:6px;"></span>Salvando...';
+
+        const formData = new FormData();
+        formData.append('avatar', selectedFile);
+
+        try {
+            const res = await fetch('/api/users/me/photo', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            
+            if (res.ok) {
+                showToast(data.message, 'success');
+                
+                // Atualiza sessão local
+                const currentUser = getSession();
+                currentUser.foto_perfil = data.url;
+                saveSession(currentUser);
+
+                // Notifica o sistema para atualizar o DOM em tempo real
+                document.dispatchEvent(new CustomEvent('user-profile-updated', { detail: currentUser }));
+                
+                // Reseta estado
+                selectedFile = null;
+                saveBtn.style.display = 'none';
+                previewLabel.classList.remove('visible');
+                overlay.classList.remove('active');
+            } else {
+                showToast(data.error || 'Erro ao fazer upload.', 'error');
+            }
+        } catch (err) {
+            showToast('Erro de conexão ao enviar imagem.', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Salvar Foto';
+        }
+    });
+
+    updateModalData(user);
+}
+
+// Atualiza dados dentro do modal
+function updateModalData(user) {
+    const defaultAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ccc' d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
+    
+    document.getElementById('modal-profile-avatar').src = user.foto_perfil || defaultAvatar;
+    document.getElementById('modal-profile-name').textContent = user.nome;
+    
+    const isAdm = user.perfil === 'adm';
+    document.getElementById('modal-profile-meta').innerHTML = `
+        Matrícula: <strong>${user.matricula}</strong> <br>
+        Tipo de Acesso: <strong>${isAdm ? 'Administrador' : 'Operacional'}</strong>
+    `;
+
+    const badgeContainer = document.getElementById('modal-profile-badge-container');
+    if (user.foto_perfil) {
+        badgeContainer.innerHTML = `<span class="badge badge--gold">👑 Ouro</span>`;
+    } else {
+        badgeContainer.innerHTML = `<span class="badge badge--bronze">🥉 Bronze</span>`;
+    }
+
+    document.getElementById('btn-save-photo').style.display = 'none';
+    document.getElementById('modal-preview-label').classList.remove('visible');
+}
+
+// Exporta para window
+window.showToast     = showToast;
+window.formatDate    = formatDate;
+window.formatDateTime= formatDateTime;
+window.daysUntil     = daysUntil;
+window.statusBadge   = statusBadge;
+window.trainingBadge = trainingBadge;
+window.getInitials   = getInitials;
+window.saveSession   = saveSession;
+window.getSession    = getSession;
+window.clearSession  = clearSession;
+window.requireLogin  = requireLogin;
+window.buildSidebar  = buildSidebar;
+window.initLogout    = initLogout;

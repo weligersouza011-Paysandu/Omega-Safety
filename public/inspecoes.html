@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspeções Avulsas — Omega Safety</title>
+    <meta name="description" content="Listagem de inspeções avulsas registradas no Omega Safety.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/n3.css">
+    <style>
+        .insp-group-label {
+            font-size:     var(--font-size-xs);
+            font-weight:   700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color:         var(--color-text-secondary);
+            padding:       var(--space-md) 0 var(--space-sm);
+            display:       flex;
+            align-items:   center;
+            gap:           var(--space-sm);
+        }
+        .insp-group-label::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--color-border);
+        }
+    </style>
+</head>
+<body>
+<div class="app-layout">
+    <div id="sidebar-root"></div>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1 class="page-header__title">Inspeções Avulsas</h1>
+                <p class="page-header__subtitle">Registro e acompanhamento de inspeções</p>
+            </div>
+            <div id="header-actions">
+                <!-- Botão de nova inspeção (fase futura) -->
+            </div>
+        </header>
+
+        <div class="page-body">
+            <div id="insp-content">
+                <div class="empty-state">
+                    <div class="empty-state__icon">⏳</div>
+                    <div class="empty-state__title">Carregando inspeções...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const user = await requireLogin();
+    if (!user) return;
+    document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'inspecoes');
+    initLogout();
+
+    const content = document.getElementById('insp-content');
+    try {
+        const data = await api.get('/inspecoes?limit=50');
+        if (!data.data.length) {
+            content.innerHTML = `<div class="empty-state">
+                <div class="empty-state__icon">🔍</div>
+                <div class="empty-state__title">Nenhuma inspeção registrada</div>
+                <div class="empty-state__desc">As inspeções realizadas aparecerão aqui agrupadas por data.</div>
+            </div>`;
+            return;
+        }
+
+        // Agrupa por data
+        const groups = {};
+        data.data.forEach(i => {
+            const d = i.data_inspecao;
+            if (!groups[d]) groups[d] = [];
+            groups[d].push(i);
+        });
+
+        content.innerHTML = Object.entries(groups)
+            .sort(([a],[b]) => b.localeCompare(a))
+            .map(([date, items]) => `
+                <div class="insp-group-label">
+                    📅 ${formatDate(date)} &nbsp;<small>(${items.length} inspeção${items.length>1?'ões':''})</small>
+                </div>
+                <div class="n3-grid" style="margin-bottom:var(--space-lg);">
+                    ${items.map(i => `
+                        <div class="n3-card">
+                            ${i.foto_path
+                                ? `<div class="n3-card__photo" style="background-image:url('${i.foto_path}')"></div>`
+                                : `<div class="n3-card__photo-placeholder">🔍</div>`}
+                            <div class="n3-card__body">
+                                <div class="n3-card__id">#${i.id.slice(0,8).toUpperCase()}</div>
+                                <div class="n3-card__title">${i.descricao || i.conclusao_tecnica || 'Inspeção'}</div>
+                                <div class="n3-card__meta">
+                                    <span class="n3-card__meta-item">👤 ${i.nome_inspetor}</span>
+                                    ${i.local ? `<span class="n3-card__meta-item">📍 ${i.local}</span>` : ''}
+                                    ${i.categoria ? `<span class="n3-card__meta-item">🏷️ ${i.categoria}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="n3-card__footer">
+                                <div class="n3-card__date">📅 ${formatDate(i.data_inspecao)}</div>
+                                ${i.lideranca ? `<span style="font-size:var(--font-size-xs);color:var(--color-text-muted)">${i.lideranca}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+
+    } catch (err) {
+        content.innerHTML = `<div class="empty-state">
+            <div class="empty-state__icon">❌</div>
+            <div class="empty-state__title">Erro ao carregar inspeções</div>
+            <div class="empty-state__desc">${err.message}</div>
+        </div>`;
+    }
+});
+</script>
+</body>
+</html>

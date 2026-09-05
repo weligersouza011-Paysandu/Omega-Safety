@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar N3 — Omega Safety</title>
+    <meta name="description" content="Formulário de registro de N3 — Quase Acidente ou Condição Insegura.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/n3.css">
+</head>
+
+<body>
+    <div class="app-layout">
+        <div id="sidebar-root"></div>
+
+        <main class="main-content">
+            <header class="page-header">
+                <div>
+                    <h1 class="page-header__title">Registrar N3</h1>
+                    <p class="page-header__subtitle">Quase Acidente ou Condição Insegura</p>
+                </div>
+                <a href="/n3/list.html" class="btn btn--secondary">← Voltar</a>
+            </header>
+
+            <div class="page-body">
+                <div class="n3-form-container">
+                    <form id="n3-form" novalidate enctype="multipart/form-data">
+
+                        <!-- Seção 1: Identificação (Limpa) -->
+                        <div class="form-section">
+                            <div class="form-section__title">
+                                <span class="icon">📋</span> Identificação do Registro
+                            </div>
+
+                            <div class="form-grid--2">
+                                <div class="form-group">
+                                    <label class="form-label" for="f-data">Data de Registro <span
+                                            class="required">*</span></label>
+                                    <input type="date" id="f-data" name="data" class="form-input" required readonly
+                                        style="opacity:0.7; cursor:not-allowed;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="f-data-hora-ocorrido">Data e Hora do Ocorrido</label>
+                                    <input type="datetime-local" id="f-data-hora-ocorrido" name="data_hora_ocorrido"
+                                        class="form-input" placeholder="Opcional — se vazio, assume o momento do envio">
+                                </div>
+                            </div>
+
+                            <div class="form-grid--2">
+                                <div class="form-group">
+                                    <label class="form-label">Nível <span id="nivel-hint"
+                                            style="font-weight:400; font-size:var(--font-size-xs); color:var(--color-text-muted);"></span></label>
+                                    <select id="f-nivel" name="nivel" class="form-select status-fixed"
+                                        style="width: 100%; height: auto; appearance: auto;">
+                                        <option value="Em Análise" selected>Em Análise</option>
+                                        <option value="N1 — Óbito ou Mudança de Vida">N1 — Óbito ou Mudança de Vida
+                                        </option>
+                                        <option value="N2 — Acidente com Afastamento">N2 — Acidente com Afastamento
+                                        </option>
+                                        <option value="N3 Prioritário — Casos Críticos">N3 Prioritário — Casos Críticos
+                                        </option>
+                                        <option value="N3 — Quase Acidente / Condição Insegura Neutralizada">N3 — Quase
+                                            Acidente / Condição Insegura Neutralizada</option>
+                                        <option value="N4 / N5 — Desvios Leves e Observações">N4 / N5 — Desvios Leves e
+                                            Observações</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Campos ocultos: matrícula e nome do observador (capturados pelo JS) -->
+                        </div>
+
+                        <!-- Seção 2: Localização e Responsáveis -->
+                        <div class="form-section">
+                            <div class="form-section__title">
+                                <span class="icon">📍</span> Localização e Responsáveis pela inspeção
+                            </div>
+
+                            <div class="form-grid--2">
+                                <div class="form-group">
+                                    <label class="form-label" for="f-contrato">Contrato <span
+                                            class="required">*</span></label>
+                                    <select id="f-contrato" name="contrato" class="form-select" required>
+                                        <option value="">Carregando contratos...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="f-lideranca">Liderança <span
+                                            class="required">*</span></label>
+                                    <select id="f-lideranca" name="lideranca" class="form-select" required>
+                                        <option value="">Selecione o contrato primeiro...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-grid--2">
+                                <div class="form-group">
+                                    <label class="form-label" for="f-local">Local / SS <span
+                                            class="required">*</span></label>
+                                    <select id="f-local" name="local_ss" class="form-select" required>
+                                        <option value="">Selecione o local...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Seção 3: Classificação -->
+                        <div class="form-section">
+                            <div class="form-section__title">
+                                <span class="icon">🏷️</span> Classificação
+                            </div>
+
+                            <div class="form-group" style="margin-bottom: var(--space-xl);">
+                                <label class="form-label">Categoria (Tipo) <span class="required">*</span></label>
+                                <div class="appsheet-grid">
+                                    <label class="appsheet-btn">
+                                        <input type="radio" name="categoria" value="Durante Inspeção ou Auditoria"
+                                            required>
+                                        <div class="card-content">Durante Inspeção ou Auditoria</div>
+                                    </label>
+                                    <label class="appsheet-btn">
+                                        <input type="radio" name="categoria"
+                                            value="Evento sem Perda (Atitude Insegura)">
+                                        <div class="card-content">Evento sem Perda (Atitude Insegura)</div>
+                                    </label>
+
+                                    <div class="form-group" style="margin-bottom: var(--space-xl);">
+                                        <label class="form-label">Subcategoria <span class="required">*</span></label>
+                                        <div class="appsheet-grid">
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Acesso inadequado" required>
+                                                <div class="card-content">Acesso inadequado</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Armazenamento incorreto">
+                                                <div class="card-content">Armazenamento incorreto</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Desvio de procedimento">
+                                                <div class="card-content">Desvio de procedimento</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Exposição a agente físico">
+                                                <div class="card-content">Exposição a agente físico</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Exposição a agente químico">
+                                                <div class="card-content">Exposição a agente químico</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Falta de EPI">
+                                                <div class="card-content">Falta de EPI</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Falta de sinalização">
+                                                <div class="card-content">Falta de sinalização</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Queda de material">
+                                                <div class="card-content">Queda de material</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="RAC 02 - Condução de Veículos e Equipamentos">
+                                                <div class="card-content">RAC 02 - Condução de Veículos e Equipamentos
+                                                </div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="RAC 03 / NR-12 - Máquinas e Equipamentos">
+                                                <div class="card-content">RAC 03 / NR-12 - Máquinas e Equipamentos</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="RAC 05 - Içamento e Movimentação de Cargas">
+                                                <div class="card-content">RAC 05 - Içamento e Movimentação de Cargas
+                                                </div>
+                                            </label>
+
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Risco de queda">
+                                                <div class="card-content">Risco de queda</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Vazamento">
+                                                <div class="card-content">Vazamento</div>
+                                            </label>
+                                            <label class="appsheet-btn"><input type="radio" name="subcategoria"
+                                                    value="Outros">
+                                                <div class="card-content">Outros</div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" id="tag-container" style="display: none;">
+                                        <label class="form-label" for="f-tag">TAG</label>
+                                        <input type="text" id="f-tag" name="tag" class="form-input"
+                                            placeholder="Ex: EQ2301" pattern="^[A-Za-z0-9]+$"
+                                            title="Apenas letras e números. Sem espaços ou caracteres especiais.">
+                                    </div>
+                                </div>
+
+                                <!-- Seção 4: Descrição -->
+                                <div class="form-section">
+                                    <div class="form-section__title">
+                                        <span class="icon">📝</span> Descrição da Ocorrência
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label" for="f-descricao">
+                                            Descrição Detalhada da Situação <span class="required">*</span>
+                                        </label>
+                                        <textarea id="f-descricao" name="descricao_situacao" class="form-textarea"
+                                            rows="5" required
+                                            placeholder="Descreva detalhadamente o quase acidente ou condição insegura identificada..."></textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label" for="f-plano">Plano de Ação</label>
+                                        <textarea id="f-plano" name="plano_acao" class="form-textarea" rows="3"
+                                            placeholder="Descreva as ações corretivas e preventivas propostas..."></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- Seção 5: Responsáveis -->
+                                <div class="form-section">
+                                    <div class="form-section__title">
+                                        <span class="icon">👥</span> Responsáveis pelo desvio
+                                    </div>
+                                    <div class="form-grid--2">
+                                        <div class="form-group">
+                                            <label class="form-label">Responsáveis pela inspeção <span
+                                                    class="required">*</span></label>
+                                            <div class="toggle-group" style="margin-top: var(--space-xs);">
+                                                <label class="toggle-btn toggle-omega">
+                                                    <input type="radio" name="empresa_responsavel" value="OMEGA"
+                                                        required>
+                                                    <div class="toggle-content">OMEGA</div>
+                                                </label>
+                                                <label class="toggle-btn toggle-cliente">
+                                                    <input type="radio" name="empresa_responsavel" value="CLIENTE"
+                                                        required>
+                                                    <div class="toggle-content">CLIENTE</div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" id="lideranca-resp-container" style="display: none;">
+                                            <label class="form-label" for="f-lideranca-resp">Liderança Responsável
+                                                (Ação) <span class="required">*</span></label>
+                                            <select id="f-lideranca-resp" name="lideranca_responsavel"
+                                                class="form-select">
+                                                <option value="">Selecione o contrato primeiro...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Seção 6: Evidências -->
+                                <div class="form-section">
+                                    <div class="form-section__title">
+                                        <span class="icon">📸</span> Evidências Fotográficas
+                                    </div>
+
+                                    <!-- Evidência 1 -->
+                                    <div class="form-group" style="margin-bottom:var(--space-lg)">
+                                        <label class="form-label">Foto 1 (Principal)</label>
+                                        <div class="upload-zone" id="upload-zone-1">
+                                            <span class="upload-zone__icon">📷</span>
+                                            <div class="upload-zone__title">Clique ou arraste uma imagem</div>
+                                            <div class="upload-zone__subtitle">JPG, PNG ou WebP até 10MB</div>
+                                            <input type="file" name="evidencia_1" id="input-foto-1" accept="image/*"
+                                                aria-label="Upload da evidência fotográfica 1">
+                                        </div>
+                                        <div id="preview-1" class="photo-preview-grid" style="display:none"></div>
+                                    </div>
+
+                                    <!-- Evidência 2 -->
+                                    <div class="form-group">
+                                        <label class="form-label">Foto 2 (Complementar)</label>
+                                        <div class="upload-zone" id="upload-zone-2">
+                                            <span class="upload-zone__icon">📷</span>
+                                            <div class="upload-zone__title">Clique ou arraste uma imagem</div>
+                                            <div class="upload-zone__subtitle">JPG, PNG ou WebP até 10MB</div>
+                                            <input type="file" name="evidencia_2" id="input-foto-2" accept="image/*"
+                                                aria-label="Upload da evidência fotográfica 2">
+                                        </div>
+                                        <div id="preview-2" class="photo-preview-grid" style="display:none"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Ações -->
+                                <div class="form-actions">
+                                    <a href="/n3/list.html" class="btn btn--secondary">Cancelar</a>
+                                    <button type="submit" class="btn btn--primary btn--lg" id="btn-submit">
+                                        <span id="btn-submit-text">✅ Registrar N3</span>
+                                    </button>
+                                </div>
+
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/n3-form.js"></script>
+</body>
+
+</html>

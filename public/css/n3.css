@@ -1,0 +1,663 @@
+/* =====================================================
+   OMEGA SAFETY — N3 Module (n3.css)
+   ===================================================== */
+
+@import './variables.css';
+
+/* ── Abas N3 (Tabs) ── */
+.n3-tabs {
+    display:        flex;
+    gap:            var(--space-md);
+    margin-bottom:  var(--space-xl);
+    border-bottom:  2px solid var(--color-border);
+    padding-bottom: 0;
+    overflow-x:     auto;
+}
+
+.n3-tab-btn {
+    background:    none;
+    border:        none;
+    color:         var(--color-text-secondary);
+    font-size:     var(--font-size-base);
+    font-weight:   600;
+    padding:       var(--space-md) var(--space-lg);
+    cursor:        pointer;
+    transition:    all var(--transition-fast);
+    position:      relative;
+    bottom:        -2px;
+    white-space:   nowrap;
+}
+
+.n3-tab-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.n3-tab-btn.active {
+    color:         var(--color-red-primary);
+    border-bottom: 3px solid var(--color-red-primary);
+}
+
+.n3-tab-content {
+    display:   none;
+    animation: n3FadeIn 0.3s ease;
+}
+
+.n3-tab-content.active {
+    display: block;
+}
+
+@keyframes n3FadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Filtro de Contrato ── */
+.n3-contract-filter {
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-md);
+    background:    var(--color-bg-card);
+    padding:       var(--space-md) var(--space-xl);
+    border-radius: var(--radius-lg);
+    border:        1px solid var(--color-border);
+    margin-bottom: var(--space-lg);
+}
+
+.n3-contract-filter__label {
+    font-size:   var(--font-size-sm);
+    font-weight: 700;
+    color:       var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+.n3-contract-filter__select {
+    max-width:     220px;
+    background:    var(--color-bg-input);
+    border:        1px solid var(--color-border);
+    color:         var(--color-text-primary);
+    padding:       8px 12px;
+    border-radius: var(--radius-md);
+    font-size:     var(--font-size-sm);
+    cursor:        pointer;
+}
+
+.n3-contract-filter__select:focus {
+    outline:      none;
+    border-color: var(--color-red-primary);
+    box-shadow:   0 0 0 2px rgba(139, 28, 49, 0.15);
+}
+
+/* ── Header da página N3 ── */
+.n3-list-header {
+    display:       flex;
+    align-items:   center;
+    justify-content: space-between;
+    margin-bottom: var(--space-lg);
+    flex-wrap:     wrap;
+    gap:           var(--space-md);
+}
+
+.n3-filters {
+    display:     flex;
+    align-items: center;
+    gap:         var(--space-sm);
+    flex-wrap:   wrap;
+}
+
+.filter-btn {
+    padding:       6px 16px;
+    border-radius: 100px;
+    font-size:     var(--font-size-xs);
+    font-weight:   600;
+    border:        1px solid var(--color-border);
+    background:    var(--color-bg-card);
+    color:         var(--color-text-secondary);
+    cursor:        pointer;
+    transition:    all var(--transition-fast);
+}
+
+.filter-btn:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.filter-btn.active {
+    background: var(--color-red-primary);
+    color: #fff;
+    border-color: var(--color-red-primary);
+}
+
+/* ── Grupo de Data (Cronológico) ── */
+.n3-date-group {
+    margin-bottom: var(--space-xl);
+}
+
+.n3-date-group__header {
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-md);
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.n3-date-group__date {
+    font-size:   var(--font-size-base);
+    font-weight: 800;
+    color:       var(--color-text-primary);
+    display:     flex;
+    align-items: center;
+    gap:         var(--space-xs);
+}
+
+.n3-date-group__count {
+    font-size:     var(--font-size-xs);
+    font-weight:   600;
+    color:         var(--color-red-primary);
+    background:    var(--color-red-soft);
+    padding:       3px 10px;
+    border-radius: 100px;
+    white-space:   nowrap;
+}
+
+/* ── Cards N3 ── */
+.n3-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--space-lg);
+}
+
+.n3-card {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow:      hidden;
+    transition:    all var(--transition-normal);
+    cursor:        pointer;
+    position:      relative;
+}
+
+.n3-card:hover {
+    border-color: var(--color-red-border);
+    transform:    translateY(-3px);
+    box-shadow:   var(--shadow-md);
+}
+
+.n3-card__photo {
+    height:              180px;
+    background-color:    var(--color-bg-secondary);
+    background-size:     cover;
+    background-position: center;
+    position:            relative;
+}
+
+.n3-card__photo-placeholder {
+    height:          180px;
+    background:      var(--color-bg-secondary);
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    font-size:       3rem;
+    color:           var(--color-text-muted);
+    position:        relative;
+}
+
+.n3-card__status-badge {
+    position:      absolute;
+    top:           var(--space-sm);
+    right:         var(--space-sm);
+}
+
+.n3-card__body {
+    padding: var(--space-md);
+}
+
+.n3-card__id {
+    font-size: var(--font-size-xs);
+    color:     var(--color-text-muted);
+    font-family: monospace;
+    margin-bottom: var(--space-xs);
+}
+
+.n3-card__title {
+    font-size:   var(--font-size-base);
+    font-weight: 700;
+    margin-bottom: var(--space-xs);
+    display:     -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow:    hidden;
+}
+
+.n3-card__meta {
+    font-size:  var(--font-size-xs);
+    color:      var(--color-text-secondary);
+    display:    flex;
+    flex-wrap:  wrap;
+    gap:        var(--space-sm);
+    margin-top: var(--space-sm);
+}
+
+.n3-card__meta-item {
+    display:     flex;
+    align-items: center;
+    gap:         4px;
+}
+
+.n3-card__footer {
+    padding:     var(--space-sm) var(--space-md);
+    border-top:  1px solid var(--color-border);
+    display:     flex;
+    align-items: center;
+    justify-content: space-between;
+    background:  var(--color-bg-secondary);
+}
+
+.n3-card__date {
+    font-size:  var(--font-size-xs);
+    color:      var(--color-text-muted);
+    display:    flex;
+    align-items: center;
+    gap:        4px;
+}
+
+/* ── Botão de Exclusão no Card (ADM) ── */
+.n3-card__delete-btn {
+    position:      absolute;
+    top:           var(--space-sm);
+    left:          var(--space-sm);
+    width:         30px;
+    height:        30px;
+    background:    rgba(0, 0, 0, 0.65);
+    border:        none;
+    border-radius: 50%;
+    color:         #ef4444;
+    font-size:     14px;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+    transition:    all var(--transition-fast);
+    z-index:       10;
+    backdrop-filter: blur(4px);
+}
+
+.n3-card__delete-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    color:      #fff;
+    transform:  scale(1.1);
+}
+
+/* ── Formulário N3 ── */
+.n3-form-container {
+    max-width: 900px;
+    margin:    0 auto;
+}
+
+.form-section {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.form-section__title {
+    font-size:     var(--font-size-base);
+    font-weight:   700;
+    margin-bottom: var(--space-lg);
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-sm);
+    color:         var(--color-text-primary);
+    padding-bottom: var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.form-section__title .icon {
+    color: var(--color-red-primary);
+    font-size: 18px;
+}
+
+/* ── Status Badge (fixo Em Análise) ── */
+.status-fixed {
+    display:       inline-flex;
+    align-items:   center;
+    gap:           var(--space-sm);
+    padding:       10px 16px;
+    background:    rgba(245,158,11,0.1);
+    border:        1px solid rgba(245,158,11,0.3);
+    border-radius: var(--radius-md);
+    font-size:     var(--font-size-sm);
+    font-weight:   600;
+    color:         var(--color-status-analise);
+}
+
+/* ── Upload de Foto ── */
+.upload-zone {
+    border:        2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-xl);
+    text-align:    center;
+    cursor:        pointer;
+    transition:    all var(--transition-fast);
+    background:    var(--color-bg-input);
+    position:      relative;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+    border-color: var(--color-red-primary);
+    background:   var(--color-red-soft);
+}
+
+.upload-zone__icon {
+    font-size:     2.5rem;
+    margin-bottom: var(--space-sm);
+    display:       block;
+    opacity:       0.5;
+    transition:    all var(--transition-fast);
+}
+
+.upload-zone:hover .upload-zone__icon,
+.upload-zone.drag-over .upload-zone__icon { opacity: 1; transform: scale(1.1); }
+
+.upload-zone__title {
+    font-size:   var(--font-size-base);
+    font-weight: 600;
+    color:       var(--color-text-primary);
+}
+
+.upload-zone__subtitle {
+    font-size:  var(--font-size-sm);
+    color:      var(--color-text-muted);
+    margin-top: 4px;
+}
+
+.upload-zone input[type="file"] {
+    position: absolute;
+    inset:    0;
+    opacity:  0;
+    cursor:   pointer;
+}
+
+/* ── Preview de Foto ── */
+.photo-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap:     var(--space-md);
+    margin-top: var(--space-md);
+}
+
+.photo-preview-item {
+    position:      relative;
+    border-radius: var(--radius-md);
+    overflow:      hidden;
+    aspect-ratio:  1;
+    border:        1px solid var(--color-border);
+}
+
+.photo-preview-item img {
+    width:       100%;
+    height:      100%;
+    object-fit:  cover;
+}
+
+.photo-preview-remove {
+    position:      absolute;
+    top:           6px; right: 6px;
+    width:         26px; height: 26px;
+    background:    rgba(0,0,0,0.7);
+    border:        none;
+    border-radius: 50%;
+    color:         #fff;
+    font-size:     14px;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    cursor:        pointer;
+    transition:    background var(--transition-fast);
+}
+.photo-preview-remove:hover { background: var(--color-red-primary); }
+
+/* ── Barra de ações do formulário ── */
+.form-actions {
+    display:         flex;
+    justify-content: flex-end;
+    gap:             var(--space-md);
+    padding-top:     var(--space-lg);
+    border-top:      1px solid var(--color-border);
+    margin-top:      var(--space-lg);
+}
+
+/* ── Modal ADM de Validação ── */
+.modal-overlay {
+    position:   fixed;
+    inset:      0;
+    background: rgba(0,0,0,0.7);
+    z-index:    500;
+    display:    flex;
+    align-items: center;
+    justify-content: center;
+    animation:  fadeIn 0.2s ease;
+    backdrop-filter: blur(4px);
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding:       var(--space-xl);
+    width:         100%;
+    max-width:     520px;
+    max-height:    90vh;
+    overflow-y:    auto;
+    box-shadow:    var(--shadow-lg);
+    animation:     slideUp 0.3s ease;
+}
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+.modal__title {
+    font-size:     var(--font-size-lg);
+    font-weight:   700;
+    margin-bottom: var(--space-lg);
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-sm);
+}
+
+/* ── Dashboard N3 (Cards de Resumo) ── */
+.n3-dashboard-cards {
+    display:               grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap:                   var(--space-md);
+    margin-bottom:         var(--space-xl);
+}
+
+.n3-dash-card {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-lg);
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-md);
+    transition:    all var(--transition-fast);
+}
+
+.n3-dash-card:hover {
+    border-color: var(--color-red-border);
+    transform:    translateY(-2px);
+    box-shadow:   var(--shadow-sm);
+}
+
+.n3-dash-card__icon {
+    font-size:       24px;
+    width:           50px;
+    height:          50px;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    border-radius:   50%;
+    flex-shrink:     0;
+}
+
+.n3-dash-card__label {
+    font-size:      var(--font-size-xs);
+    color:          var(--color-text-secondary);
+    text-transform: uppercase;
+    font-weight:    600;
+    letter-spacing: 0.04em;
+}
+
+.n3-dash-card__value {
+    font-size:   var(--font-size-2xl);
+    font-weight: 800;
+    color:       var(--color-text-primary);
+    margin-top:  2px;
+}
+
+/* ── Dashboard N3 (Gráficos Placeholder) ── */
+.n3-dashboard-charts {
+    display:               grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap:                   var(--space-xl);
+}
+
+.n3-dash-chart-placeholder {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-2xl);
+    display:       flex;
+    flex-direction: column;
+    align-items:   center;
+    justify-content: center;
+    min-height:    260px;
+    text-align:    center;
+}
+
+.n3-dash-chart-placeholder__icon {
+    font-size:     3rem;
+    margin-bottom: var(--space-md);
+    opacity:       0.35;
+}
+
+.n3-dash-chart-placeholder__title {
+    font-size:     var(--font-size-base);
+    font-weight:   700;
+    color:         var(--color-text-primary);
+    margin-bottom: var(--space-xs);
+}
+
+.n3-dash-chart-placeholder__desc {
+    font-size: var(--font-size-sm);
+    color:     var(--color-text-muted);
+    max-width: 280px;
+}
+
+/* ── AppSheet Grid (Botões de Seleção) ── */
+.appsheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-sm);
+}
+
+.appsheet-btn {
+    display: block;
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+}
+
+.appsheet-btn input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.appsheet-btn .card-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--space-md);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: all var(--transition-fast);
+    min-height: 48px;
+    user-select: none;
+}
+
+.appsheet-btn:hover .card-content {
+    border-color: var(--color-red-primary);
+    background: var(--color-red-soft);
+    color: var(--color-red-primary);
+}
+
+.appsheet-btn input:checked + .card-content {
+    background: var(--color-red-primary);
+    border-color: var(--color-red-primary);
+    color: #ffffff;
+    box-shadow: var(--shadow-sm);
+}
+
+/* ── Toggle Group (Responsáveis) ── */
+.toggle-group {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.toggle-btn {
+    flex: 1;
+    min-width: 140px;
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+}
+
+.toggle-btn input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-btn .toggle-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-md);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    transition: all var(--transition-fast);
+    text-transform: uppercase;
+    user-select: none;
+}
+
+.toggle-btn:hover .toggle-content {
+    background: var(--color-bg-hover);
+}
+
+.toggle-omega input:checked + .toggle-content {
+    background: #dc2626; /* Vermelho forte */
+    border-color: #dc2626;
+    color: #ffffff;
+    box-shadow: var(--shadow-sm);
+}
+
+.toggle-cliente input:checked + .toggle-content {
+    background: #16a34a; /* Verde forte */
+    border-color: #16a34a;
+    color: #ffffff;
+    box-shadow: var(--shadow-sm);
+}

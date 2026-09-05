@@ -1,0 +1,282 @@
+/* =====================================================
+   OMEGA SAFETY — Dashboard (dashboard.css)
+   ===================================================== */
+
+@import './variables.css';
+
+/* ── Cartões de Módulo (Inspeções / N3) ── */
+.module-grid {
+    display:               grid;
+    grid-template-columns: 1fr 1fr;
+    gap:                   var(--space-lg);
+    margin-bottom:         var(--space-xl);
+}
+
+.module-card {
+    position:      relative;
+    border-radius: var(--radius-xl);
+    overflow:      hidden;
+    height:        220px;
+    cursor:        pointer;
+    border:        1px solid var(--color-border);
+    transition:    all var(--transition-normal);
+    text-decoration: none;
+}
+
+.module-card:hover {
+    transform:    translateY(-4px);
+    box-shadow:   var(--shadow-lg);
+    border-color: var(--color-red-border);
+}
+
+.module-card__bg {
+    position: absolute;
+    inset:    0;
+    background-size:     cover;
+    background-position: center;
+    transition: transform var(--transition-slow);
+}
+
+.module-card:hover .module-card__bg { transform: scale(1.05); }
+
+.module-card__overlay {
+    position:   absolute;
+    inset:      0;
+    background: linear-gradient(
+        135deg,
+        rgba(0,0,0,0.85) 0%,
+        rgba(0,0,0,0.5) 60%,
+        rgba(200,16,46,0.2) 100%
+    );
+}
+
+.module-card__content {
+    position:  absolute;
+    bottom:    0; left: 0; right: 0;
+    padding:   var(--space-lg);
+}
+
+.module-card__icon {
+    font-size:     2rem;
+    margin-bottom: var(--space-sm);
+    display:       block;
+}
+
+.module-card__title {
+    font-size:   var(--font-size-2xl);
+    font-weight: 800;
+    color:       #fff;
+    line-height: 1;
+}
+
+.module-card__desc {
+    font-size:  var(--font-size-sm);
+    color:      rgba(255,255,255,0.7);
+    margin-top: var(--space-xs);
+}
+
+.module-card__arrow {
+    position:  absolute;
+    top:       var(--space-lg);
+    right:     var(--space-lg);
+    width:     36px; height: 36px;
+    background: var(--color-red-soft);
+    border:    1px solid var(--color-red-border);
+    border-radius: 50%;
+    display:   flex;
+    align-items: center;
+    justify-content: center;
+    color:     var(--color-red-primary);
+    font-size: 16px;
+    transition: all var(--transition-fast);
+}
+
+.module-card:hover .module-card__arrow {
+    background: var(--color-red-primary);
+    color:      #fff;
+    transform:  scale(1.1);
+}
+
+/* ── Painel de Treinamentos ── */
+.trainings-panel {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow:      hidden;
+}
+
+.trainings-panel__header {
+    padding:       var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    display:       flex;
+    align-items:   center;
+    justify-content: space-between;
+    background:    var(--color-bg-secondary);
+}
+
+.trainings-panel__title {
+    font-size:   var(--font-size-base);
+    font-weight: 700;
+    display:     flex;
+    align-items: center;
+    gap:         var(--space-sm);
+}
+
+.trainings-panel__title .icon { font-size: 18px; }
+
+.trainings-count {
+    background:    var(--color-red-soft);
+    color:         var(--color-red-primary);
+    border:        1px solid var(--color-red-border);
+    border-radius: 100px;
+    padding:       2px 10px;
+    font-size:     var(--font-size-xs);
+    font-weight:   700;
+}
+
+.trainings-panel__body {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.training-row {
+    display:       grid;
+    grid-template-columns: 1fr 90px 120px;
+    align-items:   center;
+    padding:       10px var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    gap:           var(--space-md);
+    transition:    background var(--transition-fast);
+}
+
+.training-row:last-child { border-bottom: none; }
+.training-row:hover { background: var(--color-bg-hover); }
+
+.training-row__name {
+    font-size:  var(--font-size-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow:    hidden;
+    text-overflow: ellipsis;
+}
+
+.training-row__mat {
+    font-size: var(--font-size-xs);
+    color:     var(--color-text-muted);
+    margin-top: 2px;
+}
+
+.training-row__date {
+    font-size:  var(--font-size-xs);
+    color:      var(--color-text-secondary);
+    text-align: right;
+}
+
+/* Linha de cabeçalho da tabela de treinamentos */
+.training-header {
+    display:       grid;
+    grid-template-columns: 1fr 90px 120px;
+    padding:       8px var(--space-lg);
+    background:    var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border);
+    font-size:     var(--font-size-xs);
+    font-weight:   700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color:         var(--color-text-muted);
+    gap:           var(--space-md);
+}
+
+/* ── Stats cards (ADM) ── */
+.stats-grid {
+    display:               grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap:                   var(--space-md);
+    margin-bottom:         var(--space-xl);
+}
+
+.stat-card {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-lg);
+    position:      relative;
+    overflow:      hidden;
+    transition:    all var(--transition-normal);
+}
+
+.stat-card:hover {
+    border-color: var(--color-red-border);
+    transform:    translateY(-2px);
+}
+
+.stat-card::before {
+    content:  '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height:   3px;
+    background: var(--color-red-primary);
+}
+
+.stat-card__value {
+    font-size:   var(--font-size-3xl);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.stat-card__label {
+    font-size:  var(--font-size-xs);
+    color:      var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.stat-card__icon {
+    position:  absolute;
+    right:     var(--space-md);
+    top:       50%;
+    transform: translateY(-50%);
+    font-size: 2.5rem;
+    opacity:   0.08;
+}
+
+/* ── Seção de Boas Vindas ── */
+.welcome-section {
+    margin-bottom: var(--space-xl);
+}
+
+.welcome-greeting {
+    font-size:   var(--font-size-2xl);
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.welcome-greeting span { color: var(--color-red-primary); }
+
+.welcome-sub {
+    font-size:  var(--font-size-sm);
+    color:      var(--color-text-secondary);
+    margin-top: var(--space-xs);
+}
+
+.welcome-date {
+    font-size:  var(--font-size-sm);
+    color:      var(--color-text-muted);
+    margin-top: 4px;
+}
+
+/* ── Empty State ── */
+.empty-state {
+    text-align: center;
+    padding:    var(--space-2xl) var(--space-lg);
+    color:      var(--color-text-muted);
+}
+.empty-state__icon { font-size: 3rem; margin-bottom: var(--space-md); opacity: 0.4; }
+.empty-state__title { font-size: var(--font-size-base); font-weight: 600; color: var(--color-text-secondary); }
+.empty-state__desc  { font-size: var(--font-size-sm); margin-top: var(--space-xs); }
+
+@media (max-width: 900px) {
+    .module-grid { grid-template-columns: 1fr; }
+}

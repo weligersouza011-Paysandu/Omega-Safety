@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Omega Safety</title>
+    <meta name="description" content="Sistema de Segurança do Trabalho — Omega Safety. Acesse com sua matrícula.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/login.css">
+</head>
+
+<body class="login-page">
+
+    <div class="login-container">
+        <!-- Logo -->
+        <div class="login-logo">
+            <img src="/Logo/logo.png" alt="Omega Safety Logo" class="brand-logo" />
+            <div class="login-logo__title">Omega Safety</div>
+            <div class="login-logo__subtitle">Sistema de Segurança do Trabalho</div>
+        </div>
+
+        <!-- Card de Login -->
+        <div class="login-card">
+            <div class="login-card__header">
+                <h1 class="login-card__title">Acesso ao Sistema</h1>
+                <p class="login-card__desc">Digite sua matrícula para entrar. Administradores também precisam informar a
+                    senha.</p>
+            </div>
+
+            <form id="login-form" autocomplete="off" novalidate>
+                <!-- Matrícula -->
+                <div class="form-group">
+                    <div class="login-input-group">
+                        <input type="text" id="matricula" class="login-input" placeholder="Ex: 16317" maxlength="20"
+                            inputmode="numeric" autocomplete="off" aria-label="Matrícula" required>
+                        <span class="login-input-icon">👤</span>
+                    </div>
+                    <!-- Info do usuário encontrado -->
+                    <div id="user-found" class="user-found" role="status" aria-live="polite">
+                        <span>✓</span>
+                        <span id="user-found-text"></span>
+                    </div>
+                </div>
+
+                <!-- Campo de Senha (aparece apenas para ADM) -->
+                <div id="senha-section" class="senha-section">
+                    <div class="senha-label">
+                        <span>Senha necessária</span>
+                        <span class="senha-badge">ADM</span>
+                    </div>
+                    <div class="login-input-group">
+                        <input type="password" id="senha" class="login-input" placeholder="••••••••"
+                            autocomplete="current-password" aria-label="Senha do administrador">
+                        <span class="login-input-icon">🔒</span>
+                    </div>
+                </div>
+
+                <!-- Mensagem de Erro -->
+                <div id="login-error" class="login-error" role="alert" aria-live="assertive">
+                    <span>⚠️</span>
+                    <span id="login-error-text"></span>
+                </div>
+
+                <!-- Botão -->
+                <button type="submit" id="btn-login" class="btn-login">
+                    <span id="btn-login-text">Entrar</span>
+                    <span id="btn-login-icon">→</span>
+                </button>
+            </form>
+        </div>
+
+        <div class="login-footer">
+            Omega Safety v1.0 &nbsp;·&nbsp; Segurança do Trabalho
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+</body>
+
+</html>
