@@ -40,7 +40,7 @@ async function initDB() {
     // Schema
     const schemaPath = path.join(__dirname, 'schema.sql');
     const sql = fs.readFileSync(schemaPath, 'utf8');
-    await db.execAsync(sql);
+    await db.execAsync(sql); // Cria todas as tabelas (incluindo VPS se não existir)
     
     // Migrações automáticas seguras (ignora o erro se a coluna já existir)
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN contrato TEXT'); } catch(e){}

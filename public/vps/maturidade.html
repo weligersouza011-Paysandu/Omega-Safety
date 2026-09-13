@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maturidade VPS — Omega Safety</title>
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/vps.css">
+</head>
+<body>
+<div class="app-layout">
+    <div id="sidebar-root"></div>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1 class="page-header__title">Maturidade VPS</h1>
+                <p class="page-header__subtitle">Gestão de Canteiros e Evolução de Maturidade</p>
+            </div>
+            <button class="btn btn--primary" id="btn-novo-canteiro">+ Novo Canteiro</button>
+        </header>
+
+        <nav class="vps-tabs">
+            <button class="vps-tab-btn active" data-target="tab-gestao">Gestão de Canteiros</button>
+            <button class="vps-tab-btn" data-target="tab-evolucao">Evolução de Maturidade</button>
+        </nav>
+
+        <div class="page-body">
+            <div class="vps-dashboard">
+                
+                <!-- ABA 1: Gestão de Canteiros -->
+                <div id="tab-gestao" class="vps-tab-content active">
+                    <!-- Dashboard Executivo -->
+                    <div class="stats-grid" id="stats-grid-container">
+                        <div class="stat-card">
+                            <div class="stat-card__value" id="stat-em-andamento">—</div>
+                            <div class="stat-card__label">Obras em Andamento</div>
+                            <div class="stat-card__icon">🚧</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card__value" id="stat-concluidas">—</div>
+                            <div class="stat-card__label">Obras Concluídas</div>
+                            <div class="stat-card__icon">✅</div>
+                        </div>
+                        <!-- Cards dinâmicos de maturidade serão inseridos aqui pelo JS -->
+                    </div>
+
+                    <!-- Canteiros (Cards) por Status -->
+                    <div class="canteiros-sections-wrapper" style="margin-top: var(--space-xl);">
+                        
+                        <div class="status-section">
+                            <h3 class="status-section-title">🚧 Obras em Andamento</h3>
+                            <div class="canteiros-grid" id="canteiros-andamento"></div>
+                        </div>
+
+                        <div class="status-section">
+                            <h3 class="status-section-title">⏸️ Obras Paralisadas</h3>
+                            <div class="canteiros-grid" id="canteiros-paralisadas"></div>
+                        </div>
+
+                        <div class="status-section">
+                            <h3 class="status-section-title">✅ Obras Concluídas</h3>
+                            <div class="canteiros-grid" id="canteiros-concluidas"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA 2: Evolução de Maturidade -->
+                <div id="tab-evolucao" class="vps-tab-content" style="display: none;">
+                    <div class="storytelling-header" style="margin-bottom: var(--space-xl); text-align: center;">
+                        <h2 style="color: var(--color-primary); margin-bottom: var(--space-sm);">Jornada de Maturidade</h2>
+                        <p style="color: var(--color-text-muted); max-width: 600px; margin: 0 auto;">Acompanhe o histórico de evolução, inspeções de rotina e mudanças de maturidade das frentes de obra.</p>
+                    </div>
+
+                    <!-- Timeline -->
+                    <div class="timeline-section" id="timeline-section" style="margin-top: 0; padding-top: 0; border-top: none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-lg); background: var(--color-surface); padding: var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                            <div class="form-section__title" style="margin:0;">
+                                <span class="icon">⏱️</span> Histórico Consolidado
+                            </div>
+                            <div>
+                                <select id="filtro-timeline" class="form-select" style="min-width: 250px; display: inline-block; width: auto; vertical-align: middle;">
+                                    <option value="">Todas as obras (Consolidado)</option>
+                                </select>
+                                <button class="btn btn--secondary" id="btn-novo-evento" style="margin-left:8px; vertical-align: middle;">+ Registrar Evento</button>
+                            </div>
+                        </div>
+
+                        <div class="timeline" id="timeline-container">
+                            <div class="empty-state">Selecione uma obra ou visualize o consolidado.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Modal Novo Canteiro -->
+<div id="modal-canteiro" class="profile-modal-overlay">
+    <div class="profile-modal" style="width: 500px; max-width: 90%;">
+        <button class="profile-modal__close" onclick="document.getElementById('modal-canteiro').classList.remove('active')">&times;</button>
+        <h2>Novo Canteiro de Obra</h2>
+        <form id="form-canteiro" style="margin-top: 20px;">
+            <div class="form-group">
+                <label class="form-label">Nome da Obra/SS</label>
+                <input type="text" name="nome" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Maturidade Inicial</label>
+                <select name="maturidade_inicial" class="form-select" required>
+                    <option value="1">Nível 1 (Básico)</option>
+                    <option value="2">Nível 2</option>
+                    <option value="3">Nível 3</option>
+                    <option value="4">Nível 4 (Excelência)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Capa 1</label>
+                <input type="file" name="capa_1" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Capa 2</label>
+                <input type="file" name="capa_2" class="form-input" accept="image/*">
+            </div>
+            <button type="submit" class="btn btn--primary" style="width:100%; margin-top:20px;">Salvar Canteiro</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Novo Evento Timeline -->
+<div id="modal-evento" class="profile-modal-overlay">
+    <div class="profile-modal" style="width: 600px; max-width: 90%; max-height:90vh; overflow-y:auto;">
+        <button class="profile-modal__close" onclick="document.getElementById('modal-evento').classList.remove('active')">&times;</button>
+        <h2>Registrar Evento de Maturidade</h2>
+        <form id="form-evento" style="margin-top: 20px;">
+            <div class="form-group">
+                <label class="form-label">Obra</label>
+                <select name="canteiro_id" id="evento-canteiro" class="form-select" required></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">ID da Inspeção</label>
+                <input type="text" name="id_inspecao" class="form-input" required placeholder="Ex: INSP-2026-001">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Categoria</label>
+                <select name="categoria" id="evento-categoria" class="form-select" required>
+                    <option value="Inspeção de Rotina">Inspeção de Rotina</option>
+                    <option value="Mudança de Maturidade">Mudança de Maturidade</option>
+                </select>
+            </div>
+            <div class="form-group" id="group-tipo-card">
+                <label class="form-label">Tipo de Card</label>
+                <select name="tipo_card" id="evento-tipo-card" class="form-select" required>
+                    <option value="Verde">Card Verde (5S / OK)</option>
+                    <option value="Amarelo">Card Amarelo (Não Conformidade)</option>
+                    <option value="Vermelho">Card Vermelho (Interdição/Grave)</option>
+                    <option value="Diamante" id="option-diamante">Card Diamante (Evolução Maturidade)</option>
+                </select>
+            </div>
+            <div class="form-group" id="group-nova-maturidade" style="display: none;">
+                <label class="form-label">Novo Nível de Maturidade</label>
+                <select name="novo_nivel_maturidade" id="evento-novo-nivel" class="form-select">
+                    <option value="1">Nível 1 (Básico)</option>
+                    <option value="2">Nível 2</option>
+                    <option value="3">Nível 3</option>
+                    <option value="4">Nível 4 (Excelência)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descrição</label>
+                <textarea name="descricao" class="form-textarea" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Evidência 1</label>
+                <input type="file" name="evidencia_1" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Evidência 2</label>
+                <input type="file" name="evidencia_2" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Documento/Anexo</label>
+                <input type="file" name="anexo" class="form-input">
+            </div>
+            <button type="submit" class="btn btn--primary" style="width:100%; margin-top:20px;">Salvar Evento</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Detalhes do Canteiro (Timeline Específica) -->
+<div id="modal-canteiro-detalhes" class="profile-modal-overlay">
+    <div class="profile-modal" style="width: 800px; max-width: 95%; max-height:90vh; overflow-y:auto; background: var(--color-background);">
+        <button class="profile-modal__close" onclick="document.getElementById('modal-canteiro-detalhes').classList.remove('active')">&times;</button>
+        
+        <div id="detalhes-canteiro-header" style="margin-bottom: 20px;">
+            <h2 id="detalhes-canteiro-titulo">Detalhes da Obra</h2>
+            <div class="badge" id="detalhes-canteiro-status" style="margin-top: 10px; display: inline-block;"></div>
+            <div class="badge badge--primary" id="detalhes-canteiro-maturidade" style="margin-top: 10px; display: inline-block; margin-left: 10px;"></div>
+        </div>
+
+        <div class="timeline-section" style="margin-top: 0; padding-top: 20px; border-top: 1px solid var(--color-border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-lg);">
+                <div class="form-section__title" style="margin:0;">
+                    <span class="icon">⏱️</span> Histórico da Obra
+                </div>
+            </div>
+            <div class="timeline" id="detalhes-timeline-container">
+                <div class="empty-state">Carregando histórico...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Canteiro -->
+<div id="modal-editar-canteiro" class="profile-modal-overlay">
+    <div class="profile-modal" style="width: 500px; max-width: 90%;">
+        <button class="profile-modal__close" onclick="document.getElementById('modal-editar-canteiro').classList.remove('active')">&times;</button>
+        <h2>Editar Canteiro de Obra</h2>
+        <form id="form-editar-canteiro" style="margin-top: 20px;">
+            <input type="hidden" name="id" id="editar-canteiro-id">
+            <div class="form-group">
+                <label class="form-label">Nome da Obra/SS</label>
+                <input type="text" name="nome" id="editar-canteiro-nome" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Status da Obra</label>
+                <select name="status" id="editar-canteiro-status" class="form-select" required>
+                    <option value="Em andamento">Em andamento</option>
+                    <option value="Paralisada">Paralisada</option>
+                    <option value="Concluída">Concluída</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Substituir Capa 1 (Opcional)</label>
+                <input type="file" name="capa_1" class="form-input" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Substituir Capa 2 (Opcional)</label>
+                <input type="file" name="capa_2" class="form-input" accept="image/*">
+            </div>
+            <button type="submit" class="btn btn--primary" style="width:100%; margin-top:20px;">Salvar Alterações</button>
+        </form>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/vps-maturidade.js"></script>
+</body>
+</html>

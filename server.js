@@ -51,6 +51,7 @@ app.use('/api/n3',        require('./routes/n3'));
 app.use('/api/treinamentos', require('./routes/trainings'));
 app.use('/api/inspecoes', require('./routes/inspections'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/vps', require('./routes/vps'));
 
 // ────────────────────────────────────────────────
 //  Rotas do Front-End (Sem extensão .html)
@@ -58,6 +59,7 @@ app.use('/api/users', require('./routes/users'));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inspecoes', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inspecoes.html')));
 app.get('/admin/users', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'usuarios.html')));
+app.get('/vps/maturidade', (req, res) => res.sendFile(path.join(__dirname, 'public', 'vps', 'maturidade.html')));
 app.get('/n3', (req, res) => res.sendFile(path.join(__dirname, 'public', 'n3', 'list.html')));
 app.get('/n3/novo', (req, res) => res.sendFile(path.join(__dirname, 'public', 'n3', 'form.html')));
 

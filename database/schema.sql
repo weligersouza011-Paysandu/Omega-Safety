@@ -103,3 +103,38 @@ CREATE INDEX IF NOT EXISTS idx_n3_status              ON n3_registros(status);
 CREATE INDEX IF NOT EXISTS idx_n3_data                ON n3_registros(data);
 CREATE INDEX IF NOT EXISTS idx_inspecoes_matricula    ON inspecoes_avulsas(matricula);
 CREATE INDEX IF NOT EXISTS idx_inspecoes_data         ON inspecoes_avulsas(data_inspecao);
+
+-- ------------------------------------------------------------
+-- VPS - CANTEIROS (Maturidade VPS)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vps_canteiros (
+    id            TEXT PRIMARY KEY, -- UUID
+    nome          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'Em andamento' CHECK(status IN ('Em andamento', 'Concluída', 'Paralisada')),
+    maturidade    INTEGER NOT NULL DEFAULT 1 CHECK(maturidade IN (1,2,3,4)),
+    capa_1_path   TEXT,
+    capa_2_path   TEXT,
+    criado_em     DATETIME DEFAULT (datetime('now','localtime'))
+);
+
+-- ------------------------------------------------------------
+-- VPS - HISTÓRICO DE MATURIDADE / EVENTOS
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vps_historico (
+    id               TEXT PRIMARY KEY, -- UUID
+    canteiro_id      TEXT NOT NULL,
+    id_inspecao      TEXT,
+    data_registro    DATE NOT NULL DEFAULT (date('now','localtime')),
+    categoria        TEXT NOT NULL CHECK(categoria IN ('Inspeção de Rotina', 'Mudança de Maturidade')),
+    tipo_card        TEXT NOT NULL CHECK(tipo_card IN ('Verde', 'Amarelo', 'Vermelho', 'Diamante', 'N/A')),
+    descricao        TEXT,
+    evidencia_1_path TEXT,
+    evidencia_2_path TEXT,
+    anexo_path       TEXT,
+    criado_por       TEXT, -- Matricula do ADM
+    criado_em        DATETIME DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_vps_historico_canteiro ON vps_historico(canteiro_id);
+CREATE INDEX IF NOT EXISTS idx_vps_canteiros_status ON vps_canteiros(status);

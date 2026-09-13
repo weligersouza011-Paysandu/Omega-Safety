@@ -114,6 +114,7 @@ function buildSidebar(user, activePage) {
         { href: '/n3',   icon: '⚠️', label: 'N3',       key: 'n3' },
     ];
     if (isAdm) {
+        navLinks.push({ href: '/vps/maturidade', icon: '📈', label: 'Maturidade VPS', key: 'vps' });
         navLinks.push({ href: '/admin/treinamentos', icon: '📋', label: 'Treinamentos', key: 'treinamentos' });
         navLinks.push({ href: '/admin/users',     icon: '👥', label: 'Gestão de Usuários', key: 'usuarios' });
         navLinks.push({ href: '/admin/dashboard',   icon: '📊', label: 'Painel ADM',   key: 'adm' });

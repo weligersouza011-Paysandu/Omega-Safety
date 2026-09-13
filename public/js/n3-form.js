@@ -10,18 +10,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Data de Registro: travada na data de hoje ──
     document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
 
-    // ── Nível: travado para operacionais, editável para ADMs ──
+    // ── Nível: pré-preenche "Em Análise" para todos; trava para operacionais ──
     const nivelSelect = document.getElementById('f-nivel');
-    const nivelHint = document.getElementById('nivel-hint');
+    const nivelHint   = document.getElementById('nivel-hint');
     const isMasterOrAdm = user.is_master === 1 || user.perfil === 'adm';
 
+    // Garante o valor padrão independentemente do atributo HTML `selected`
+    nivelSelect.value = 'Em Análise';
+
     if (!isMasterOrAdm) {
+        // Operacional: campo travado, valor fixo
         nivelSelect.disabled = true;
-        nivelSelect.value = 'Em Análise';
-        nivelSelect.style.opacity = '0.7';
-        nivelSelect.style.cursor = 'not-allowed';
-        nivelHint.textContent = '(travado para operacionais)';
+        nivelSelect.style.opacity  = '0.65';
+        nivelSelect.style.cursor   = 'not-allowed';
+        nivelHint.textContent = '(travado — apenas ADM pode alterar)';
     } else {
+        // ADM: campo habilitado, valor pré-selecionado mas editável
+        nivelSelect.disabled = false;
+        nivelSelect.style.opacity = '';
+        nivelSelect.style.cursor  = '';
         nivelHint.textContent = '(editável por ADM)';
     }
 
@@ -260,11 +267,11 @@ async function submitN3(e) {
 
         const result = await api.upload('/n3', formData);
 
-        showToast('N3 registrado com sucesso! Status: Em Análise.', 'success');
+        showToast('N3 registrado com sucesso! Redirecionando...', 'success');
 
         setTimeout(() => {
-            window.location.href = '/n3/list.html';
-        }, 1500);
+            window.location.replace('/n3/list.html');
+        }, 500);
 
     } catch (err) {
         showToast(err.message || 'Erro ao registrar N3.', 'error');
@@ -305,15 +312,20 @@ function setupNivelColors() {
 
 async function loadLocais() {
     try {
-        const locais = await api.get('/n3/locais');
+        const canteiros = await api.get('/vps/canteiros?status=Em andamento');
         const select = document.getElementById('f-local');
-        if (select && locais && locais.length) {
-            locais.forEach(local => {
-                const opt = document.createElement('option');
-                opt.value = local;
-                opt.textContent = local;
-                select.appendChild(opt);
-            });
+        if (select) {
+            select.innerHTML = '<option value="">Selecione o canteiro/local...</option>';
+            if (canteiros && canteiros.length > 0) {
+                canteiros.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.nome;
+                    opt.textContent = c.nome;
+                    select.appendChild(opt);
+                });
+            } else {
+                select.innerHTML = '<option value="">Nenhum canteiro em andamento...</option>';
+            }
         }
     } catch (err) {
         console.error('Erro ao carregar locais:', err);
