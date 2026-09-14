@@ -1,4 +1,7 @@
 node_modules/
-database/*.db
-database/sessions.db
 .env
+*.db
+*.db-shm
+*.db-wal
+uploads/
+.DS_Store

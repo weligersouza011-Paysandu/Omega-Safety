@@ -71,22 +71,26 @@ async function loadContractOptions() {
     try {
         const contratos = await api.get('/n3/contratos');
         const selectList = document.getElementById('select-contrato-n3');
-        const selectDash = document.getElementById('select-contrato-dashboard');
+        const selectDash = document.getElementById('dash3-contrato') || document.getElementById('select-contrato-dashboard');
 
         contratos.forEach(c => {
-            const opt1 = new Option(`Contrato ${c}`, c);
-            selectList.appendChild(opt1);
-            if (selectDash) {
-                const opt2 = new Option(`Contrato ${c}`, c);
-                selectDash.appendChild(opt2);
+            const cleanCode = String(c).replace(/[^0-9a-zA-Z]/g, '') || String(c).trim();
+            if (!cleanCode) return;
+            
+            if (selectList && !selectList.querySelector(`option[value="${cleanCode}"]`)) {
+                selectList.appendChild(new Option(`Contrato ${cleanCode}`, cleanCode));
+            }
+            if (selectDash && !selectDash.querySelector(`option[value="${cleanCode}"]`)) {
+                selectDash.appendChild(new Option(`Contrato ${cleanCode}`, cleanCode));
             }
         });
 
         // Pré-seleciona com o contrato do ADM logado
         if (currentUser.contrato) {
-            selectList.value = currentUser.contrato;
-            currentContrato = currentUser.contrato;
-            if (selectDash) selectDash.value = currentUser.contrato;
+            const userC = String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim();
+            if (selectList) selectList.value = userC;
+            currentContrato = userC;
+            if (selectDash) selectDash.value = userC;
         }
 
         // Evento de alteração
@@ -107,14 +111,14 @@ async function loadContractOptions() {
 }
 
 // ═══════════════════════════════════════════════════
-//  FILTROS DE STATUS
+//  FILTROS DE NÍVEL
 // ═══════════════════════════════════════════════════
 function setupStatusFilters() {
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            currentFilter = btn.dataset.status;
+            currentFilter = btn.dataset.nivel;
             loadN3();
         });
     });
@@ -132,7 +136,7 @@ async function loadN3() {
 
     try {
         const qp = new URLSearchParams({ limit: 500 });
-        if (currentFilter) qp.set('status', currentFilter);
+        if (currentFilter) qp.set('nivel', currentFilter);
         if (currentContrato) qp.set('contrato', currentContrato);
 
         const data = await api.get(`/n3?${qp}`);
@@ -145,7 +149,7 @@ async function loadN3() {
                     <div class="empty-state__icon">📭</div>
                     <div class="empty-state__title">Nenhum N3 encontrado</div>
                     <div class="empty-state__desc">
-                        ${currentFilter ? `Nenhum registro com status "${currentFilter}".` : 'Seja o primeiro a registrar um N3!'}
+                        ${currentFilter ? `Nenhum registro com nível "${currentFilter}".` : 'Seja o primeiro a registrar um N3!'}
                     </div>
                 </div>
             </div>`;
@@ -162,7 +166,7 @@ async function loadN3() {
 
             // Header do grupo com data e contador
             groupEl.innerHTML = `
-                <div class="n3-date-group__header">
+                <div class="n3-date-group__header" style="color: #FFFFFF; font-weight: bold;">
                     <div class="n3-date-group__date">📅 ${group.dateFormatted}</div>
                     <div class="n3-date-group__count">${group.items.length} registro${group.items.length > 1 ? 's' : ''}</div>
                 </div>
@@ -244,14 +248,10 @@ function groupByDate(records) {
 function renderN3Card(n3) {
     const isAdm = currentUser.perfil === 'adm';
 
+    // Foto limpa (sem badge sobre ela)
     const foto = n3.evidencia_1_path
-        ? `<div class="n3-card__photo" style="background-image:url('${n3.evidencia_1_path}')">
-               <div class="n3-card__status-badge">${statusBadge(n3.status)}</div>
-           </div>`
-        : `<div class="n3-card__photo-placeholder">
-               ⚠️
-               <div class="n3-card__status-badge" style="position:absolute;top:8px;right:8px">${statusBadge(n3.status)}</div>
-           </div>`;
+        ? `<div class="n3-card__photo" style="background-image:url('${n3.evidencia_1_path}')"></div>`
+        : `<div class="n3-card__photo-placeholder">⚠️</div>`;
 
     // Botão de exclusão apenas para ADM
     const deleteBtn = isAdm
@@ -263,12 +263,12 @@ function renderN3Card(n3) {
             ${deleteBtn}
             ${foto}
             <div class="n3-card__body">
-                <div class="n3-card__id">#${n3.id.slice(0,8).toUpperCase()}</div>
+                <div style="margin-bottom: 8px;">${statusBadge(n3.nivel || 'Em Análise')}</div>
                 <div class="n3-card__title">${n3.descricao_situacao || '(sem descrição)'}</div>
                 <div class="n3-card__meta">
                     <span class="n3-card__meta-item">👤 ${n3.nome_observador}</span>
                     ${n3.local_ss ? `<span class="n3-card__meta-item">📍 ${n3.local_ss}</span>` : ''}
-                    ${n3.categoria ? `<span class="n3-card__meta-item">🏷️ ${n3.categoria}</span>` : ''}
+                    ${n3.subcategoria ? `<span class="n3-card__meta-item">🏷️ ${n3.subcategoria}</span>` : ''}
                 </div>
             </div>
             <div class="n3-card__footer">
@@ -311,8 +311,44 @@ async function openModal(id) {
     }
 }
 
-function renderModal(n3) {
+async function renderModal(n3) {
     const isAdm = currentUser.perfil === 'adm';
+
+    // Buscar histórico
+    let historicoHtml = '';
+    try {
+        const hist = await api.get(`/n3/${n3.id}/historico`);
+        if (hist && hist.length > 0) {
+            historicoHtml = `
+            <div>
+                <div style="font-size:var(--font-size-xs);font-weight:700;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:8px;">Histórico de Alterações</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    ${hist.map(h => {
+                        // Formata data_hora de forma robusta
+                        let dataFmt = '—';
+                        let horaFmt = '—';
+                        if (h.data_hora) {
+                            const dt = new Date(h.data_hora);
+                            if (!isNaN(dt.getTime())) {
+                                dataFmt = dt.toLocaleDateString('pt-BR');
+                                horaFmt = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                            }
+                        }
+                        return `
+                        <div style="background:var(--color-bg-input);padding:8px 12px;border-radius:var(--radius-sm);font-size:var(--font-size-sm);border-left:3px solid var(--color-red-primary);">
+                            <div style="display:flex;justify-content:space-between;color:var(--color-text-muted);font-size:var(--font-size-xs);margin-bottom:4px;">
+                                <span>👤 ${h.usuario_nome}</span>
+                                <span>📅 ${dataFmt} às ${horaFmt}</span>
+                            </div>
+                            <div>${h.detalhes}</div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }
+    } catch(err) {
+        console.error('Erro ao buscar histórico:', err);
+    }
 
     const fotos = [n3.evidencia_1_path, n3.evidencia_2_path].filter(Boolean);
     const fotosHtml = fotos.length
@@ -322,11 +358,38 @@ function renderModal(n3) {
             </div>`).join('')}</div>`
         : '<p style="color:var(--color-text-muted);font-size:var(--font-size-sm)">Sem evidências fotográficas.</p>';
 
+    const nivelOptions = [
+        'Em Análise',
+        'N1 — Óbito ou Mudança de Vida',
+        'N2 — Acidente com Afastamento',
+        'N3 Prioritário — Casos Críticos',
+        'N3 — Quase Acidente / Condição Insegura Neutralizada',
+        'N4 / N5 — Desvios Leves e Observações'
+    ];
+
+    // Cor dinâmica por nível para o header do modal
+    const nivelColorMap = {
+        'Em Análise':                                              { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)',  color: '#f59e0b' },
+        'N1 — Óbito ou Mudança de Vida':                         { bg: '#111111',               border: '#444444',               color: '#ffffff' },
+        'N2 — Acidente com Afastamento':                         { bg: 'rgba(234,179,8,0.12)',   border: 'rgba(234,179,8,0.4)',   color: '#facc15' },
+        'N3 Prioritário — Casos Críticos':                       { bg: 'rgba(239,68,68,0.15)',   border: 'rgba(239,68,68,0.5)',   color: '#f87171' },
+        'N3 — Quase Acidente / Condição Insegura Neutralizada':  { bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.4)',  color: '#fb923c' },
+        'N4 / N5 — Desvios Leves e Observações':                 { bg: 'rgba(34,197,94,0.10)',   border: 'rgba(34,197,94,0.35)', color: '#4ade80' },
+    };
+    const nivelAtual = n3.nivel || 'Em Análise';
+    const cor = nivelColorMap[nivelAtual] || nivelColorMap['Em Análise'];
+
+    const nivelSelect = isAdm ? `
+        <select id="modal-adm-nivel" class="form-select" style="font-size: var(--font-size-sm); border-color: ${cor.border}; color: ${cor.color}; background: ${cor.bg};">
+            ${nivelOptions.map(s => `<option value="${s}" ${s === nivelAtual ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+    ` : statusBadge(nivelAtual);
+
     document.getElementById('modal-body').innerHTML = `
         <div style="display:grid;gap:var(--space-md);">
-            <div class="flex flex-between">
-                <div>${statusBadge(n3.status)}</div>
-                <div style="font-size:var(--font-size-xs);color:var(--color-text-muted)">#${n3.id.slice(0,8).toUpperCase()} · ${formatDate(n3.data)}</div>
+            <div style="background:${cor.bg}; border:1px solid ${cor.border}; border-radius:var(--radius-md); padding: 10px 14px; display:flex; align-items:center; gap: 10px;">
+                <div style="flex:1;">${nivelSelect}</div>
+                <div style="font-size:var(--font-size-xs);color:${cor.color};opacity:0.8;white-space:nowrap;">${formatDate(n3.data)}</div>
             </div>
 
             <div class="form-grid--2" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-sm);">
@@ -355,27 +418,19 @@ function renderModal(n3) {
                 ${fotosHtml}
             </div>
 
-            ${n3.observacoes_adm ? `<div>
-                <div style="font-size:var(--font-size-xs);font-weight:700;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:4px;">Observações ADM</div>
-                <div style="background:rgba(200,16,46,0.05);border:1px solid var(--color-red-border);padding:12px;border-radius:var(--radius-sm);font-size:var(--font-size-sm);">${n3.observacoes_adm}</div>
-            </div>` : ''}
-
-            ${isAdm ? renderAdmValidation(n3) : ''}
+            ${historicoHtml}
         </div>
     `;
 
     // Botões ADM de ação rápida
     const actionsDiv = document.querySelector('#detail-modal .form-actions');
+    actionsDiv.innerHTML = `<button class="btn btn--secondary" id="btn-fechar-modal">Fechar</button>`;
+    document.getElementById('btn-fechar-modal').addEventListener('click', closeModal);
+
     if (isAdm) {
-        actionsDiv.innerHTML = `
-            <button class="btn btn--secondary" id="btn-fechar-modal">Fechar</button>
-            <button class="btn btn--primary" id="btn-salvar-validacao">💾 Salvar Validação</button>
-        `;
-        document.getElementById('btn-fechar-modal').addEventListener('click', closeModal);
-        document.getElementById('btn-salvar-validacao').addEventListener('click', () => saveValidation(n3.id));
-    } else {
-        actionsDiv.innerHTML = `<button class="btn btn--secondary" id="btn-fechar-modal">Fechar</button>`;
-        document.getElementById('btn-fechar-modal').addEventListener('click', closeModal);
+        document.getElementById('modal-adm-nivel').addEventListener('change', (e) => {
+            saveValidation(n3.id, e.target.value);
+        });
     }
 }
 
@@ -386,32 +441,11 @@ function field(label, value) {
     </div>`;
 }
 
-function renderAdmValidation(n3) {
-    const statusOptions = ['Em Análise','Aprovado','Reprovado','Pendente','Concluído'];
-    return `
-        <div style="border-top:1px solid var(--color-border);padding-top:var(--space-md);margin-top:var(--space-sm);">
-            <div style="font-size:var(--font-size-xs);font-weight:700;text-transform:uppercase;color:var(--color-red-primary);margin-bottom:var(--space-md);">⚙️ Validação ADM</div>
-            <div class="form-group">
-                <label class="form-label" for="adm-status">Alterar Status</label>
-                <select id="adm-status" class="form-select">
-                    ${statusOptions.map(s => `<option value="${s}" ${s === n3.status ? 'selected' : ''}>${s}</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="adm-obs">Observações</label>
-                <textarea id="adm-obs" class="form-textarea" rows="3" placeholder="Registre o parecer técnico...">${n3.observacoes_adm || ''}</textarea>
-            </div>
-        </div>
-    `;
-}
-
-async function saveValidation(id) {
-    const status = document.getElementById('adm-status').value;
-    const obs    = document.getElementById('adm-obs').value;
+async function saveValidation(id, nivel) {
 
     try {
-        await api.patch(`/n3/${id}/status`, { status, observacoes_adm: obs });
-        showToast(`N3 atualizado para "${status}".`, 'success');
+        await api.patch(`/n3/${id}/nivel`, { nivel });
+        showToast(`Nível atualizado para "${nivel}".`, 'success');
         closeModal();
         loadN3();
     } catch (err) {
@@ -425,39 +459,8 @@ function closeModal() {
 
 // ═══════════════════════════════════════════════════
 //  DASHBOARD N3 (Aba 2 — ADM)
+//  A lógica completa foi movida para /js/n3-dashboard.js
+//  Esta função é mantida como ponto de entrada para
+//  compatibilidade com o setupTabs() acima.
 // ═══════════════════════════════════════════════════
-async function loadDashboardN3() {
-    const dashContrato = document.getElementById('select-contrato-dashboard')?.value || '';
-
-    try {
-        const qp = new URLSearchParams({ limit: 9999 });
-        if (dashContrato) qp.set('contrato', dashContrato);
-
-        const data = await api.get(`/n3?${qp}`);
-        const records = data.data;
-
-        // Contadores por status
-        const counts = {
-            'Em Análise': 0,
-            'Aprovado': 0,
-            'Reprovado': 0,
-            'Concluído': 0,
-            'Pendente': 0,
-        };
-
-        records.forEach(r => {
-            if (counts.hasOwnProperty(r.status)) {
-                counts[r.status]++;
-            }
-        });
-
-        document.getElementById('dash-em-analise').textContent = counts['Em Análise'];
-        document.getElementById('dash-aprovados').textContent   = counts['Aprovado'];
-        document.getElementById('dash-reprovados').textContent  = counts['Reprovado'];
-        document.getElementById('dash-concluidos').textContent  = counts['Concluído'];
-
-    } catch (err) {
-        console.error('Erro ao carregar dashboard N3:', err);
-        showToast('Erro ao carregar indicadores do Dashboard N3.', 'error');
-    }
-}
+// loadDashboardN3 é definida em n3-dashboard.js e chamada pelo setupTabs()

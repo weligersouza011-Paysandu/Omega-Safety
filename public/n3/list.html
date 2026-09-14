@@ -45,14 +45,16 @@
                     </select>
                 </div>
 
-                <!-- Filtros de Status -->
+                <!-- Filtros de Nível -->
                 <div class="n3-list-header">
-                    <div class="n3-filters" id="filter-buttons" role="group" aria-label="Filtrar por status">
-                        <button class="filter-btn active" data-status="" id="filter-todos">Todos</button>
-                        <button class="filter-btn" data-status="Em Análise" id="filter-analise">⏳ Em Análise</button>
-                        <button class="filter-btn" data-status="Aprovado"   id="filter-aprovado">✅ Aprovados</button>
-                        <button class="filter-btn" data-status="Reprovado"  id="filter-reprovado">❌ Reprovados</button>
-                        <button class="filter-btn" data-status="Concluído"  id="filter-concluido">🏁 Concluídos</button>
+                    <div class="n3-filters" id="filter-buttons" role="group" aria-label="Filtrar por nível">
+                        <button class="filter-btn active" data-nivel="" id="filter-todos">Todos</button>
+                        <button class="filter-btn" data-nivel="Em Análise" id="filter-analise">⏳ Em Análise</button>
+                        <button class="filter-btn" data-nivel="N1 — Óbito ou Mudança de Vida" id="filter-n1">N1</button>
+                        <button class="filter-btn" data-nivel="N2 — Acidente com Afastamento" id="filter-n2">🟡 N2</button>
+                        <button class="filter-btn" data-nivel="N3 Prioritário — Casos Críticos" id="filter-n3-prioritario">🔴 N3 Prioritário</button>
+                        <button class="filter-btn" data-nivel="N3 — Quase Acidente / Condição Insegura Neutralizada" id="filter-n3-normal">🟠 N3</button>
+                        <button class="filter-btn" data-nivel="N4 / N5 — Desvios Leves e Observações" id="filter-n4-n5">🟢 N4/N5</button>
                     </div>
                     <div style="font-size:var(--font-size-sm); color:var(--color-text-muted)">
                         <span id="total-label">Carregando...</span>
@@ -69,60 +71,227 @@
             <!-- ════════ ABA 2: DASHBOARD N3 (ADM) ════════ -->
             <div id="tab-dashboard-n3" class="n3-tab-content" style="display:none;">
 
-                <!-- Filtro de Contrato do Dashboard -->
-                <div class="n3-contract-filter" id="dashboard-contract-filter-bar">
-                    <label for="select-contrato-dashboard" class="n3-contract-filter__label">📑 Contrato:</label>
-                    <select id="select-contrato-dashboard" class="form-select n3-contract-filter__select">
-                        <option value="">Todos os Contratos</option>
-                    </select>
-                </div>
-
-                <!-- Cards de Resumo -->
-                <div class="n3-dashboard-cards">
-                    <div class="n3-dash-card">
-                        <div class="n3-dash-card__icon" style="background:rgba(245,158,11,0.1);color:#f59e0b;">⏳</div>
+                <!-- ── Hero Banner ── -->
+                <div class="dash3-hero">
+                    <div class="dash3-hero__overlay"></div>
+                    <div class="dash3-hero__content">
+                        <div class="dash3-hero__badge">1</div>
                         <div>
-                            <div class="n3-dash-card__label">Em Análise</div>
-                            <div class="n3-dash-card__value" id="dash-em-analise">0</div>
-                        </div>
-                    </div>
-                    <div class="n3-dash-card">
-                        <div class="n3-dash-card__icon" style="background:rgba(34,197,94,0.1);color:#22c55e;">✅</div>
-                        <div>
-                            <div class="n3-dash-card__label">Aprovados</div>
-                            <div class="n3-dash-card__value" id="dash-aprovados">0</div>
-                        </div>
-                    </div>
-                    <div class="n3-dash-card">
-                        <div class="n3-dash-card__icon" style="background:rgba(239,68,68,0.1);color:#ef4444;">❌</div>
-                        <div>
-                            <div class="n3-dash-card__label">Reprovados</div>
-                            <div class="n3-dash-card__value" id="dash-reprovados">0</div>
-                        </div>
-                    </div>
-                    <div class="n3-dash-card">
-                        <div class="n3-dash-card__icon" style="background:rgba(99,102,241,0.1);color:#6366f1;">🏁</div>
-                        <div>
-                            <div class="n3-dash-card__label">Concluídos</div>
-                            <div class="n3-dash-card__value" id="dash-concluidos">0</div>
+                            <h2 class="dash3-hero__title">Registros de N3</h2>
+                            <p class="dash3-hero__desc">Este dashboard reflete a lógica de segurança do Omega Safety, focando na hierarquia de severidade (N1 a N5). Nosso foco estratégico está no N3 (Normal e Prioritário): entender e tratar o N3 é a nossa principal barreira para evitar que um N1 (morte) ou N2 (afastamento) venha a ocorrer. Através do engajamento das equipes, monitoramos desde desvios de baixo potencial (N4 e N5) até situações de alto risco, garantindo uma cultura de prevenção.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Área de Gráficos (preparada para futuras implementações) -->
-                <div class="n3-dashboard-charts">
-                    <div class="n3-dash-chart-placeholder">
-                        <div class="n3-dash-chart-placeholder__icon">📊</div>
-                        <div class="n3-dash-chart-placeholder__title">Evolução Mensal de N3</div>
-                        <div class="n3-dash-chart-placeholder__desc">Espaço reservado para o gráfico de evolução temporal.</div>
-                        <canvas id="chartN3Evolution" style="display:none;"></canvas>
+                <!-- ── Barra de Filtros ── -->
+                <div class="dash3-filters" id="dash3-filter-bar">
+                    <div class="dash3-filters__group">
+                        <label class="dash3-filters__label" for="dash3-contrato">Contrato</label>
+                        <select id="dash3-contrato" class="dash3-filters__select">
+                            <option value="">Todos</option>
+                        </select>
                     </div>
-                    <div class="n3-dash-chart-placeholder">
-                        <div class="n3-dash-chart-placeholder__icon">🏷️</div>
-                        <div class="n3-dash-chart-placeholder__title">Distribuição por Categoria</div>
-                        <div class="n3-dash-chart-placeholder__desc">Espaço reservado para o gráfico de categorias.</div>
-                        <canvas id="chartN3Categories" style="display:none;"></canvas>
+                    <div class="dash3-filters__group">
+                        <label class="dash3-filters__label" for="dash3-mes">Mês</label>
+                        <select id="dash3-mes" class="dash3-filters__select">
+                            <option value="">Todos</option>
+                        </select>
                     </div>
+                    <div class="dash3-filters__group">
+                        <label class="dash3-filters__label" for="dash3-ano">Ano</label>
+                        <select id="dash3-ano" class="dash3-filters__select">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <div class="dash3-filters__group">
+                        <label class="dash3-filters__label" for="dash3-local">Local/SS</label>
+                        <select id="dash3-local" class="dash3-filters__select">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                    <button class="dash3-filters__clear" id="dash3-clear-filters">Limpar Filtros</button>
+                </div>
+
+                <!-- ── Layout Principal: Gráfico Liderança + Pirâmide ── -->
+                <div class="dash3-main-grid">
+
+                    <!-- Coluna Esquerda: Gráfico Total por Liderança -->
+                    <div class="dash3-chart-box">
+                        <div class="dash3-chart-box__title">Total de Registros por Liderança</div>
+                        <div class="dash3-chart-box__body" style="height:480px;">
+                            <canvas id="chartLideranca"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Coluna Direita: Pirâmide 3D HUD de Severidade -->
+                    <div class="dash3-chart-box dash3-pyramid-section">
+                        <div class="dash3-chart-box__title">
+                            Pirâmide de Severidade
+                            <span id="pyr-active-label" class="dash3-pyr-active-label" style="display:none;"></span>
+                        </div>
+                        <div class="dash3-pyramid-wrapper" id="pyr-container">
+
+                            <!-- SVG 3D com Gradientes Facetados + Callout Lines HUD -->
+                            <svg class="dash3-pyramid-svg" viewBox="0 0 520 310" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <!-- N1: Preto/Carvão -->
+                                    <linearGradient id="gN1L" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#3a3a48"/><stop offset="100%" stop-color="#111116"/></linearGradient>
+                                    <linearGradient id="gN1R" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0c0c10"/><stop offset="100%" stop-color="#1e1e28"/></linearGradient>
+                                    <!-- N2: Vermelho -->
+                                    <linearGradient id="gN2L" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f87171"/><stop offset="100%" stop-color="#ef4444"/></linearGradient>
+                                    <linearGradient id="gN2R" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7f1d1d"/><stop offset="100%" stop-color="#b91c1c"/></linearGradient>
+                                    <!-- N3P: Laranja (N3 Prioritário) -->
+                                    <linearGradient id="gN3PL" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fdba74"/><stop offset="100%" stop-color="#f97316"/></linearGradient>
+                                    <linearGradient id="gN3PR" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c2d12"/><stop offset="100%" stop-color="#c2410c"/></linearGradient>
+                                    <!-- N3N: Amarelo (N3 Normal) -->
+                                    <linearGradient id="gN3NL" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fef08a"/><stop offset="100%" stop-color="#facc15"/></linearGradient>
+                                    <linearGradient id="gN3NR" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#78350f"/><stop offset="100%" stop-color="#ca8a04"/></linearGradient>
+                                    <!-- N45: Verde (N4/N5 base) -->
+                                    <linearGradient id="gN45L" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#86efac"/><stop offset="100%" stop-color="#22c55e"/></linearGradient>
+                                    <linearGradient id="gN45R" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#14532d"/><stop offset="100%" stop-color="#15803d"/></linearGradient>
+                                    <!-- Drop shadow -->
+                                    <filter id="pyrShadow" x="-10%" y="-10%" width="130%" height="130%">
+                                        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(0,0,0,0.5)" flood-opacity="1"/>
+                                    </filter>
+                                    <!-- Glow on hover -->
+                                    <filter id="pyrGlow" x="-30%" y="-30%" width="160%" height="160%">
+                                        <feGaussianBlur stdDeviation="4" result="blur"/>
+                                        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                    </filter>
+                                </defs>
+
+                                <!-- ── Callout Lines HUD — 5 níveis oficiais (Linhas compactas à esquerda) ── -->
+                                <!-- N1 (Preto/Platina) · anchorY=40 -->
+                                <g class="pyr-callout" id="callout-n1">
+                                    <line x1="42" y1="40" x2="319" y2="40" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.85"/>
+                                    <circle cx="36" cy="40" r="3.5" fill="#cbd5e1" opacity="0.9"/>
+                                    <circle cx="320" cy="40" r="4" fill="#cbd5e1" opacity="0.9"/>
+                                    <text x="6" y="44" fill="#cbd5e1" font-size="13" font-weight="900" font-family="Inter,sans-serif">N1</text>
+                                </g>
+                                <!-- N2 (Vermelho) · anchorY=91 -->
+                                <g class="pyr-callout" id="callout-n2">
+                                    <line x1="42" y1="91" x2="287" y2="91" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.85"/>
+                                    <circle cx="36" cy="91" r="3.5" fill="#ef4444" opacity="0.9"/>
+                                    <circle cx="288" cy="91" r="4" fill="#ef4444" opacity="0.9"/>
+                                    <text x="6" y="95" fill="#ef4444" font-size="13" font-weight="900" font-family="Inter,sans-serif">N2</text>
+                                </g>
+                                <!-- N3P (Laranja) · anchorY=142 -->
+                                <g class="pyr-callout" id="callout-n3p">
+                                    <line x1="46" y1="142" x2="255" y2="142" stroke="#f97316" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.85"/>
+                                    <circle cx="40" cy="142" r="3.5" fill="#f97316" opacity="0.9"/>
+                                    <circle cx="256" cy="142" r="4" fill="#f97316" opacity="0.9"/>
+                                    <text x="6" y="146" fill="#f97316" font-size="13" font-weight="900" font-family="Inter,sans-serif">N3P</text>
+                                </g>
+                                <!-- N3N (Amarelo) · anchorY=193 -->
+                                <g class="pyr-callout" id="callout-n3n">
+                                    <line x1="46" y1="193" x2="223" y2="193" stroke="#facc15" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.85"/>
+                                    <circle cx="40" cy="193" r="3.5" fill="#facc15" opacity="0.9"/>
+                                    <circle cx="224" cy="193" r="4" fill="#facc15" opacity="0.9"/>
+                                    <text x="6" y="197" fill="#facc15" font-size="13" font-weight="900" font-family="Inter,sans-serif">N3N</text>
+                                </g>
+                                <!-- N4/N5 (Verde) · anchorY=244 -->
+                                <g class="pyr-callout" id="callout-n45">
+                                    <line x1="60" y1="244" x2="191" y2="244" stroke="#22c55e" stroke-width="1.2" stroke-dasharray="4 2" opacity="0.85"/>
+                                    <circle cx="54" cy="244" r="3.5" fill="#22c55e" opacity="0.9"/>
+                                    <circle cx="192" cy="244" r="4" fill="#22c55e" opacity="0.9"/>
+                                    <text x="6" y="248" fill="#22c55e" font-size="13" font-weight="900" font-family="Inter,sans-serif">N4/N5</text>
+                                </g>
+
+                                <!-- ── Pirâmide 3D Hero (5 níveis oficiais, centro x=340) ── -->
+                                <g filter="url(#pyrShadow)">
+
+                                    <!-- Camada 1: N1 — Preto (Topo) -->
+                                    <g class="pyr-layer" data-nivel="pyr-n1" data-callout="callout-n1" style="cursor:pointer;">
+                                        <polygon points="340,12 308,58.6 340,67.6" fill="url(#gN1L)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+                                        <polygon points="340,12 340,67.6 372,58.6" fill="url(#gN1R)" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+                                        <text x="340" y="50" text-anchor="middle" fill="#e2e8f0" font-size="18" font-weight="900" font-family="Inter,sans-serif" id="pyr-n1">0</text>
+                                    </g>
+
+                                    <!-- Camada 2: N2 — Vermelho -->
+                                    <g class="pyr-layer" data-nivel="pyr-n2" data-callout="callout-n2" style="cursor:pointer;">
+                                        <polygon points="308,58.6 276,105.2 340,123.2 340,67.6" fill="url(#gN2L)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <polygon points="340,67.6 340,123.2 404,105.2 372,58.6" fill="url(#gN2R)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <text x="340" y="104" text-anchor="middle" fill="#ffffff" font-size="20" font-weight="900" font-family="Inter,sans-serif" id="pyr-n2">0</text>
+                                    </g>
+
+                                    <!-- Camada 3: N3 Prioritário — Laranja -->
+                                    <g class="pyr-layer" data-nivel="pyr-n3p" data-callout="callout-n3p" style="cursor:pointer;">
+                                        <polygon points="276,105.2 244,151.8 340,178.8 340,123.2" fill="url(#gN3PL)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <polygon points="340,123.2 340,178.8 436,151.8 404,105.2" fill="url(#gN3PR)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <text x="340" y="160" text-anchor="middle" fill="#ffffff" font-size="22" font-weight="900" font-family="Inter,sans-serif" id="pyr-n3p">0</text>
+                                    </g>
+
+                                    <!-- Camada 4: N3 Normal — Amarelo -->
+                                    <g class="pyr-layer" data-nivel="pyr-n3n" data-callout="callout-n3n" style="cursor:pointer;">
+                                        <polygon points="244,151.8 212,198.4 340,234.4 340,178.8" fill="url(#gN3NL)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <polygon points="340,178.8 340,234.4 468,198.4 436,151.8" fill="url(#gN3NR)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <text x="340" y="215" text-anchor="middle" fill="#1e293b" font-size="24" font-weight="900" font-family="Inter,sans-serif" id="pyr-n3n">0</text>
+                                    </g>
+
+                                    <!-- Camada 5: N4/N5 — Verde (Base) -->
+                                    <g class="pyr-layer" data-nivel="pyr-n45" data-callout="callout-n45" style="cursor:pointer;">
+                                        <polygon points="212,198.4 180,245.0 340,290.0 340,234.4" fill="url(#gN45L)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <polygon points="340,234.4 340,290.0 500,245.0 468,198.4" fill="url(#gN45R)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                                        <text x="340" y="270" text-anchor="middle" fill="#ffffff" font-size="26" font-weight="900" font-family="Inter,sans-serif" id="pyr-n45">0</text>
+                                    </g>
+
+                                </g><!-- /shadow group -->
+                            </svg>
+
+                            <!-- Painel Holográfico Expansivo (Lado a Lado - Card Lateral de Detalhes) -->
+                            <div id="pyr-holo-panel" class="pyr-holo-panel pyr-holo-panel--active">
+                                <div class="pyr-holo__scan"></div>
+                                <div class="pyr-holo__body" id="pyr-holo-body"></div>
+                            </div>
+
+                        </div><!-- /wrapper -->
+
+                        <!-- Rodapé: chip de filtro ativo + botão reset -->
+                        <div class="dash3-pyr-footer" id="pyr-filter-footer" style="display:none;">
+                            <span class="dash3-pyr-chip" id="pyr-chip-text"></span>
+                            <button class="dash3-pyr-reset" id="pyr-reset-btn">✕ Limpar filtro de nível</button>
+                        </div>
+
+                    </div><!-- /coluna direita -->
+                </div><!-- /dash3-main-grid -->
+
+                <!-- ── Gráfico Evolução Mensal ── -->
+                <div class="dash3-chart-box" style="margin-top:24px;">
+                    <div class="dash3-chart-box__title">Evolução Mensal por Nível</div>
+                    <div class="dash3-chart-box__body" style="height:320px;">
+                        <canvas id="chartEvolucao"></canvas>
+                    </div>
+                </div>
+
+                <!-- ── Grade Inferior: Subcategorias + Local / SS ── -->
+                <div class="dash3-bottom-grid" style="margin-top:24px;">
+                    <div class="dash3-chart-box">
+                        <div class="dash3-chart-box__title">N3 por Subcategorias</div>
+                        <div class="dash3-chart-box__body" style="height:380px;">
+                            <canvas id="chartSubcategorias"></canvas>
+                        </div>
+                    </div>
+                    <div class="dash3-chart-box">
+                        <div class="dash3-chart-box__title">Local / SS</div>
+                        <div class="dash3-chart-box__body" style="height:380px;">
+                            <canvas id="chartPendentes"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Treemap: Registros por Usuário (Parte Inferior Absoluta) ── -->
+                <div class="dash3-chart-box" style="margin-top:24px;">
+                    <div class="dash3-chart-box__title">Registros por Usuário (Treemap)</div>
+                    <div class="dash3-chart-box__body" id="treemap-container" style="height:380px; position:relative;">
+                        <canvas id="chartTreemapUsuarios"></canvas>
+                        <div id="dash3-treemap-tooltip" class="dash3-tooltip"></div>
+                    </div>
+                </div>
+
+                <!-- Spinner de loading -->
+                <div id="dash3-loading" class="dash3-loading" style="display:none;">
+                    <div class="spinner" style="width:40px;height:40px;border-width:4px;"></div>
+                    <span>Carregando dados...</span>
                 </div>
 
             </div>
@@ -151,5 +320,6 @@
 <script src="/js/api.js"></script>
 <script src="/js/utils.js"></script>
 <script src="/js/n3-list.js"></script>
+<script src="/js/n3-dashboard.js"></script>
 </body>
 </html>

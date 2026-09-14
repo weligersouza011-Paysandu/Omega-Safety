@@ -40,22 +40,48 @@ function formatDateTime(dtStr) {
 // Retorna quantos dias faltam para o vencimento (negativo = vencido)
 function daysUntil(dateStr) {
     if (!dateStr) return null;
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const alvo = new Date(dateStr + 'T00:00:00');
     return Math.round((alvo - hoje) / (1000 * 60 * 60 * 24));
 }
 
 // ── Badge de Status N3 ───────────────────────────────
 function statusBadge(status) {
-    const map = {
-        'Em Análise': 'analise',
-        'Aprovado':   'aprovado',
-        'Reprovado':  'reprovado',
-        'Pendente':   'pendente',
-        'Concluído':  'concluido',
+    // Mapa: valor do banco → { cls, label }
+    const levels = {
+        'Em Análise': {
+            cls: 'nivel-analise', label: '⏳ Em Análise'
+        },
+        'N1 — Óbito ou Mudança de Vida': {
+            cls: 'nivel-n1', label: 'N1'
+        },
+        'N2 — Acidente com Afastamento': {
+            cls: 'nivel-n2', label: '🟡 N2'
+        },
+        'N3 Prioritário — Casos Críticos': {
+            cls: 'nivel-n3p', label: '🔴 N3 Prioritário'
+        },
+        'N3 — Quase Acidente / Condição Insegura Neutralizada': {
+            cls: 'nivel-n3', label: '🟠 N3'
+        },
+        'N4 / N5 — Desvios Leves e Observações': {
+            cls: 'nivel-n4n5', label: '🟢 N4/N5'
+        },
+        // Legados (retrocompatibilidade)
+        'Aprovado': { cls: 'aprovado', label: 'Aprovado' },
+        'Reprovado': { cls: 'reprovado', label: 'Reprovado' },
+        'Pendente': { cls: 'pendente', label: 'Pendente' },
+        'Concluído': { cls: 'concluido', label: 'Concluído' },
+        'N1': { cls: 'n1', label: 'N1' },
+        'N2': { cls: 'n2', label: '🟡 N2' },
+        'N3': { cls: 'n3', label: '🔴 N3' }
     };
-    const cls = map[status] || 'analise';
-    return `<span class="badge badge--${cls}">${status}</span>`;
+
+    const entry = levels[status];
+    if (entry) {
+        return `<span class="badge badge--${entry.cls}">${entry.label}</span>`;
+    }
+    return `<span class="badge badge--nivel-analise">${status}</span>`;
 }
 
 // ── Badge de Situação de Treinamento ────────────────
@@ -111,13 +137,13 @@ function buildSidebar(user, activePage) {
     const navLinks = [
         { href: '/dashboard', icon: '🏠', label: 'Início', key: 'dashboard' },
         { href: '/inspecoes', icon: '🔍', label: 'Inspeções', key: 'inspecoes' },
-        { href: '/n3',   icon: '⚠️', label: 'N3',       key: 'n3' },
+        { href: '/n3', icon: '⚠️', label: 'N3', key: 'n3' },
     ];
     if (isAdm) {
         navLinks.push({ href: '/vps/maturidade', icon: '📈', label: 'Maturidade VPS', key: 'vps' });
         navLinks.push({ href: '/admin/treinamentos', icon: '📋', label: 'Treinamentos', key: 'treinamentos' });
-        navLinks.push({ href: '/admin/users',     icon: '👥', label: 'Gestão de Usuários', key: 'usuarios' });
-        navLinks.push({ href: '/admin/dashboard',   icon: '📊', label: 'Painel ADM',   key: 'adm' });
+        navLinks.push({ href: '/admin/users', icon: '👥', label: 'Gestão de Usuários', key: 'usuarios' });
+        navLinks.push({ href: '/admin/dashboard', icon: '📊', label: 'Painel ADM', key: 'adm' });
     }
 
     const links = navLinks.map(l => `
@@ -127,10 +153,10 @@ function buildSidebar(user, activePage) {
         </a>
     `).join('');
 
-    const gamificationBadge = user.foto_perfil 
-        ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">👑 Ouro</span>` 
+    const gamificationBadge = user.foto_perfil
+        ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">👑 Ouro</span>`
         : `<span class="badge badge--bronze" style="font-size:10px; margin-top:4px;">🥉 Bronze</span>`;
-        
+
     const avatarHtml = user.foto_perfil
         ? `<img src="${user.foto_perfil}" alt="Perfil" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
         : getInitials(user.nome);
@@ -178,7 +204,7 @@ async function initLogout() {
                 window.location.href = '/';
             }
         }
-        
+
         // Abre o modal de perfil ao clicar no card do usuário
         if (e.target.closest('#btn-profile-modal-trigger')) {
             const user = getSession();
@@ -192,7 +218,7 @@ async function initLogout() {
     // Sincronização do DOM Local (Sidebar e cabeçalho na mesma página)
     document.addEventListener('user-profile-updated', e => {
         const updatedUser = e.detail;
-        
+
         // Atualiza imagem na barra lateral
         const avatarEl = document.querySelector('.sidebar__avatar');
         if (avatarEl) {
@@ -230,7 +256,7 @@ function ensureProfileModal(user) {
     overlay = document.createElement('div');
     overlay.id = 'profile-modal-overlay';
     overlay.className = 'profile-modal-overlay';
-    
+
     overlay.innerHTML = `
         <div class="profile-modal">
             <button class="profile-modal__close" id="btn-close-profile-modal">&times;</button>
@@ -253,9 +279,9 @@ function ensureProfileModal(user) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(overlay);
-    
+
     // Bind eventos de fechar
     document.getElementById('btn-close-profile-modal').addEventListener('click', () => {
         overlay.classList.remove('active');
@@ -272,17 +298,17 @@ function ensureProfileModal(user) {
     const previewLabel = document.getElementById('modal-preview-label');
     const avatarImg = document.getElementById('modal-profile-avatar');
     const avatarWrapper = document.getElementById('btn-modal-avatar-click');
-    
+
     const triggerFileSelect = () => fileInput.click();
     selectBtn.addEventListener('click', triggerFileSelect);
     avatarWrapper.addEventListener('click', triggerFileSelect);
-    
+
     let selectedFile = null;
 
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        
+
         selectedFile = file;
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -308,10 +334,10 @@ function ensureProfileModal(user) {
                 body: formData
             });
             const data = await res.json();
-            
+
             if (res.ok) {
                 showToast(data.message, 'success');
-                
+
                 // Atualiza sessão local
                 const currentUser = getSession();
                 currentUser.foto_perfil = data.url;
@@ -319,7 +345,7 @@ function ensureProfileModal(user) {
 
                 // Notifica o sistema para atualizar o DOM em tempo real
                 document.dispatchEvent(new CustomEvent('user-profile-updated', { detail: currentUser }));
-                
+
                 // Reseta estado
                 selectedFile = null;
                 saveBtn.style.display = 'none';
@@ -342,10 +368,10 @@ function ensureProfileModal(user) {
 // Atualiza dados dentro do modal
 function updateModalData(user) {
     const defaultAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ccc' d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
-    
+
     document.getElementById('modal-profile-avatar').src = user.foto_perfil || defaultAvatar;
     document.getElementById('modal-profile-name').textContent = user.nome;
-    
+
     const isAdm = user.perfil === 'adm';
     document.getElementById('modal-profile-meta').innerHTML = `
         Matrícula: <strong>${user.matricula}</strong> <br>
@@ -364,16 +390,16 @@ function updateModalData(user) {
 }
 
 // Exporta para window
-window.showToast     = showToast;
-window.formatDate    = formatDate;
-window.formatDateTime= formatDateTime;
-window.daysUntil     = daysUntil;
-window.statusBadge   = statusBadge;
+window.showToast = showToast;
+window.formatDate = formatDate;
+window.formatDateTime = formatDateTime;
+window.daysUntil = daysUntil;
+window.statusBadge = statusBadge;
 window.trainingBadge = trainingBadge;
-window.getInitials   = getInitials;
-window.saveSession   = saveSession;
-window.getSession    = getSession;
-window.clearSession  = clearSession;
-window.requireLogin  = requireLogin;
-window.buildSidebar  = buildSidebar;
-window.initLogout    = initLogout;
+window.getInitials = getInitials;
+window.saveSession = saveSession;
+window.getSession = getSession;
+window.clearSession = clearSession;
+window.requireLogin = requireLogin;
+window.buildSidebar = buildSidebar;
+window.initLogout = initLogout;

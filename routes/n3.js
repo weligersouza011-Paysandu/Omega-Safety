@@ -38,7 +38,14 @@ router.get('/contratos', requireAuth, async (req, res) => {
             WHERE u.contrato IS NOT NULL AND u.contrato != ''
             ORDER BY u.contrato ASC
         `);
-        res.json(rows.map(r => r.contrato));
+        const set = new Set();
+        rows.forEach(r => {
+            if (r.contrato) {
+                const c = String(r.contrato).replace(/[^0-9]/g, '') || String(r.contrato).trim();
+                if (c) set.add(c);
+            }
+        });
+        res.json([...set]);
     } catch(err) {
         res.status(500).json({ error: err.message });
     }
@@ -62,7 +69,7 @@ router.get('/locais', requireAuth, async (req, res) => {
 // GET /api/n3
 router.get('/', requireAuth, async (req, res) => {
     const { perfil, matricula, contrato: userContrato, is_master } = req.session.usuario;
-    const { status, page = 1, limit = 200, contrato } = req.query;
+    const { nivel, page = 1, limit = 200, contrato } = req.query;
 
     let where = 'WHERE 1=1';
     const params = [];
@@ -71,39 +78,43 @@ router.get('/', requireAuth, async (req, res) => {
 
     if (!isMasterOrAdm) {
         // Operacional: filtra pelo contrato do usuário logado (via JOIN)
-        if (userContrato) {
-            where += ` AND u.contrato = ?`;
-            params.push(userContrato);
+        if (userContrato && String(userContrato).trim() !== '' && String(userContrato).trim() !== 'Todos') {
+            const userContratoLimpo = String(userContrato).replace(/[^0-9a-zA-Z]/g, '') || String(userContrato).trim();
+            where += ` AND (REPLACE(TRIM(CAST(u.contrato AS TEXT)), 'Contrato ', '') = ? OR TRIM(CAST(u.contrato AS TEXT)) = ?)`;
+            params.push(userContratoLimpo, String(userContrato).trim());
         } else {
             // Sem contrato: mostra apenas os próprios
             where += ` AND n.matricula_observador = ?`;
             params.push(matricula);
         }
     } else {
-        // ADM: filtra por contrato se informado via query
-        if (contrato) {
-            where += ` AND u.contrato = ?`;
-            params.push(contrato);
+        // ADM: filtra por contrato se informado via query e não for "Todos"
+        if (contrato && String(contrato).trim() !== '' && String(contrato).trim() !== 'Todos') {
+            const contratoLimpo = String(contrato).replace(/[^0-9a-zA-Z]/g, '') || String(contrato).trim();
+            where += ` AND (REPLACE(TRIM(CAST(u.contrato AS TEXT)), 'Contrato ', '') = ? OR TRIM(CAST(u.contrato AS TEXT)) = ?)`;
+            params.push(contratoLimpo, String(contrato).trim());
         }
     }
 
-    if (status) {
-        where += ` AND n.status = ?`;
-        params.push(status);
+    if (nivel) {
+        where += ` AND n.nivel = ?`;
+        params.push(nivel);
     }
 
     const offset = (Number(page) - 1) * Number(limit);
 
     try {
         const rows  = await db.allAsync(`
-            SELECT n.* FROM n3_registros n
-            JOIN usuarios u ON u.matricula = n.matricula_observador
+            SELECT n.*, u.contrato as contrato, COALESCE(u.nome, n.nome_observador) as nome_observador
+            FROM n3_registros n
+            LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
             ${where}
             ORDER BY n.data DESC, n.criado_em DESC LIMIT ? OFFSET ?
         `, [...params, Number(limit), offset]);
         const count = await db.getAsync(`
-            SELECT COUNT(*) as count FROM n3_registros n
-            JOIN usuarios u ON u.matricula = n.matricula_observador
+            SELECT COUNT(*) as count
+            FROM n3_registros n
+            LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
             ${where}
         `, params);
         res.json({ data: rows, total: count.count, page: Number(page), limit: Number(limit) });
@@ -184,21 +195,44 @@ router.post('/', requireAuth, upload.fields([
     }
 });
 
-// PATCH /api/n3/:id/status
-router.patch('/:id/status', requireAdm, async (req, res) => {
-    const { status, observacoes_adm } = req.body;
-    const validos = ['Em Análise','Aprovado','Reprovado','Pendente','Concluído'];
-    if (!validos.includes(status)) return res.status(400).json({ error: 'Status inválido.' });
+// GET /api/n3/:id/historico
+router.get('/:id/historico', requireAuth, async (req, res) => {
+    try {
+        const rows = await db.allAsync(
+            'SELECT * FROM n3_historico WHERE n3_id = ? ORDER BY data_hora DESC',
+            [req.params.id]
+        );
+        res.json(rows);
+    } catch(err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/n3/:id/nivel
+router.patch('/:id/nivel', requireAdm, async (req, res) => {
+    const { nivel } = req.body;
+    if (!nivel) return res.status(400).json({ error: 'Nível é obrigatório.' });
 
     try {
-        const existing = await db.getAsync('SELECT id FROM n3_registros WHERE id = ?', [req.params.id]);
+        const existing = await db.getAsync('SELECT id, nivel FROM n3_registros WHERE id = ?', [req.params.id]);
         if (!existing) return res.status(404).json({ error: 'Não encontrado.' });
 
+        const antigo = existing.nivel || 'N/A';
+
         await db.runAsync(
-            `UPDATE n3_registros SET status=?, observacoes_adm=?, validado_por=?, validado_em=datetime('now','localtime') WHERE id=?`,
-            [status, observacoes_adm||null, req.session.usuario.matricula, req.params.id]
+            `UPDATE n3_registros SET nivel=? WHERE id=?`,
+            [nivel, req.params.id]
         );
-        res.json({ message: `Status atualizado para "${status}".` });
+
+        // Inserir no histórico
+        const detalhes = `Nível alterado de '${antigo}' para '${nivel}'`;
+        const dataHoraAgora = new Date().toISOString(); // ex: 2026-09-13T23:59:00.000Z
+        await db.runAsync(
+            `INSERT INTO n3_historico (n3_id, usuario_nome, detalhes, data_hora) VALUES (?,?,?,?)`,
+            [req.params.id, req.session.usuario.nome, detalhes, dataHoraAgora]
+        );
+
+        res.json({ message: `Nível atualizado para "${nivel}".` });
     } catch(err) {
         res.status(500).json({ error: err.message });
     }

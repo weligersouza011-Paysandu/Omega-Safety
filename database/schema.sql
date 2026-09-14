@@ -138,3 +138,17 @@ CREATE TABLE IF NOT EXISTS vps_historico (
 
 CREATE INDEX IF NOT EXISTS idx_vps_historico_canteiro ON vps_historico(canteiro_id);
 CREATE INDEX IF NOT EXISTS idx_vps_canteiros_status ON vps_canteiros(status);
+
+-- ------------------------------------------------------------
+-- N3 - HISTÓRICO DE ALTERAÇÕES
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS n3_historico (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    n3_id            TEXT NOT NULL,
+    data_hora        DATETIME DEFAULT (datetime('now','localtime')),
+    usuario_nome     TEXT NOT NULL,
+    detalhes         TEXT NOT NULL,
+    FOREIGN KEY (n3_id) REFERENCES n3_registros(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_n3_historico_n3id ON n3_historico(n3_id);
