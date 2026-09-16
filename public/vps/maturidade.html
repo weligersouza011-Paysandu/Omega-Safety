@@ -31,22 +31,29 @@
                 
                 <!-- ABA 1: Gestão de Canteiros -->
                 <div id="tab-gestao" class="vps-tab-content active">
-                    <!-- Dashboard Executivo -->
-                    <div class="stats-grid" id="stats-grid-container">
-                        <div class="stat-card">
-                            <div class="stat-card__value" id="stat-em-andamento">—</div>
-                            <div class="stat-card__label">Obras em Andamento</div>
-                            <div class="stat-card__icon">🚧</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-card__value" id="stat-concluidas">—</div>
-                            <div class="stat-card__label">Obras Concluídas</div>
-                            <div class="stat-card__icon">✅</div>
-                        </div>
+                    <!-- 1. Dashboard Executivo: Grade de Cards de Métricas de Maturidade (5S) -->
+                    <div class="vps-maturidade-grid" id="stats-grid-container">
                         <!-- Cards dinâmicos de maturidade serão inseridos aqui pelo JS -->
                     </div>
 
-                    <!-- Canteiros (Cards) por Status -->
+                    <!-- 2. Seção de Cards Históricos Compactos (Diamante, Verde, Amarelo, Vermelho) -->
+                    <div class="vps-historico-cards-section" style="margin-top: var(--space-xl); border-top: 1px solid var(--color-border); padding-top: var(--space-xl);">
+                        <div style="margin-bottom: var(--space-md); display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h3 style="font-size: var(--font-size-lg); color: var(--color-text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    📊 Resumo do Histórico de Cards Emitidos
+                                </h3>
+                                <p style="font-size: var(--font-size-xs); color: var(--color-text-muted); margin: 4px 0 0 0;">
+                                    Total consolidado de avaliações por tipo de card no sistema
+                                </p>
+                            </div>
+                        </div>
+                        <div class="vps-historico-compact-grid" id="historico-cards-compact-container">
+                            <!-- Cards compactos dinâmicos inseridos via JS -->
+                        </div>
+                    </div>
+
+                    <!-- 3. Canteiros (Cards) por Status -->
                     <div class="canteiros-sections-wrapper" style="margin-top: var(--space-xl);">
                         
                         <div class="status-section">
@@ -109,13 +116,15 @@
                 <input type="text" name="nome" class="form-input" required>
             </div>
             <div class="form-group">
-                <label class="form-label">Maturidade Inicial</label>
-                <select name="maturidade_inicial" class="form-select" required>
-                    <option value="1">Nível 1 (Básico)</option>
-                    <option value="2">Nível 2</option>
-                    <option value="3">Nível 3</option>
-                    <option value="4">Nível 4 (Excelência)</option>
+                <label class="form-label">Maturidade Inicial 5S</label>
+                <select name="maturidade_inicial" id="canteiro-maturidade-inicial" class="form-select" required>
+                    <option value="0">0 - Inexistente (Vermelho)</option>
+                    <option value="1">1 - Fraco (Laranja)</option>
+                    <option value="2">2 - Em implantação (Amarelo)</option>
+                    <option value="3" selected>3 - Implantado (Verde)</option>
+                    <option value="4">4 - Excelência (Azul)</option>
                 </select>
+                <div id="preview-maturidade-inicial" style="margin-top: 10px;"></div>
             </div>
             <div class="form-group">
                 <label class="form-label">Capa 1</label>
@@ -161,13 +170,15 @@
                 </select>
             </div>
             <div class="form-group" id="group-nova-maturidade" style="display: none;">
-                <label class="form-label">Novo Nível de Maturidade</label>
+                <label class="form-label">Novo Nível de Maturidade 5S</label>
                 <select name="novo_nivel_maturidade" id="evento-novo-nivel" class="form-select">
-                    <option value="1">Nível 1 (Básico)</option>
-                    <option value="2">Nível 2</option>
-                    <option value="3">Nível 3</option>
-                    <option value="4">Nível 4 (Excelência)</option>
+                    <option value="0">0 - Inexistente (Vermelho)</option>
+                    <option value="1">1 - Fraco (Laranja)</option>
+                    <option value="2">2 - Em implantação (Amarelo)</option>
+                    <option value="3">3 - Implantado (Verde)</option>
+                    <option value="4">4 - Excelência (Azul)</option>
                 </select>
+                <div id="preview-maturidade-novo-nivel" style="margin-top: 10px;"></div>
             </div>
             <div class="form-group">
                 <label class="form-label">Descrição</label>
@@ -198,7 +209,8 @@
         <div id="detalhes-canteiro-header" style="margin-bottom: 20px;">
             <h2 id="detalhes-canteiro-titulo">Detalhes da Obra</h2>
             <div class="badge" id="detalhes-canteiro-status" style="margin-top: 10px; display: inline-block;"></div>
-            <div class="badge badge--primary" id="detalhes-canteiro-maturidade" style="margin-top: 10px; display: inline-block; margin-left: 10px;"></div>
+            <div id="detalhes-canteiro-maturidade" style="margin-top: 10px; display: inline-block; margin-left: 10px;"></div>
+            <div id="detalhes-canteiro-graphic-container" style="margin-top: 15px;"></div>
         </div>
 
         <div class="timeline-section" style="margin-top: 0; padding-top: 20px; border-top: 1px solid var(--color-border);">
@@ -210,6 +222,19 @@
             <div class="timeline" id="detalhes-timeline-container">
                 <div class="empty-state">Carregando histórico...</div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detalhes do Evento / Inspeção -->
+<div id="modal-detalhes-evento" class="profile-modal-overlay">
+    <div class="profile-modal" style="width: 650px; max-width: 92%; max-height: 90vh; overflow-y: auto;">
+        <button class="profile-modal__close" onclick="document.getElementById('modal-detalhes-evento').classList.remove('active')">&times;</button>
+        <h2 style="margin-bottom: 4px;">Detalhamento do Registro</h2>
+        <p style="color: var(--color-text-muted); font-size: 0.88rem; margin-bottom: 20px;">Informações completas e evidências anexadas</p>
+        
+        <div id="detalhes-evento-conteudo">
+            <!-- Preenchido dinamicamente pelo JavaScript -->
         </div>
     </div>
 </div>
@@ -232,6 +257,17 @@
                     <option value="Paralisada">Paralisada</option>
                     <option value="Concluída">Concluída</option>
                 </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Maturidade 5S</label>
+                <select name="maturidade" id="editar-canteiro-maturidade" class="form-select" required>
+                    <option value="0">0 - Inexistente (Vermelho)</option>
+                    <option value="1">1 - Fraco (Laranja)</option>
+                    <option value="2">2 - Em implantação (Amarelo)</option>
+                    <option value="3">3 - Implantado (Verde)</option>
+                    <option value="4">4 - Excelência (Azul)</option>
+                </select>
+                <div id="preview-maturidade-editar" style="margin-top: 10px;"></div>
             </div>
             <div class="form-group">
                 <label class="form-label">Substituir Capa 1 (Opcional)</label>

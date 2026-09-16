@@ -56,6 +56,87 @@
     gap: var(--space-md);
 }
 
+/* ── Nova Grade de Cards Executivos de Maturidade 5S ── */
+.vps-maturidade-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-lg, 20px);
+}
+
+.vps-maturidade-card {
+    position: relative;
+    border-radius: 16px;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--color-surface, #121c38) 0%, rgba(15, 23, 42, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 140px;
+}
+
+.vps-maturidade-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px var(--card-glow, rgba(0,0,0,0.4));
+    border-color: var(--card-border-hover, rgba(255, 255, 255, 0.2));
+}
+
+.vps-maturidade-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.vps-maturidade-card__badge {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.vps-maturidade-card__icon {
+    font-size: 26px;
+    opacity: 0.9;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.vps-maturidade-card__body {
+    display: flex;
+    flex-direction: column;
+}
+
+.vps-maturidade-card__value {
+    font-size: 2.8rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1px;
+    margin-bottom: 6px;
+    font-family: inherit;
+}
+
+.vps-maturidade-card__label {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--color-text, #ffffff);
+    margin-bottom: 4px;
+}
+
+.vps-maturidade-card__subtext {
+    font-size: 0.78rem;
+    color: var(--color-text-muted, #94a3b8);
+    font-weight: 500;
+}
+
 /* Cards de Canteiros */
 .canteiros-grid {
     display: grid;
@@ -188,17 +269,53 @@
     z-index: 2;
 }
 
-.timeline-item--Verde .timeline-item__badge { border-color: #388e3c; background: #388e3c; }
-.timeline-item--Amarelo .timeline-item__badge { border-color: #fbc02d; background: #fbc02d; }
-.timeline-item--Vermelho .timeline-item__badge { border-color: #d32f2f; background: #d32f2f; }
-.timeline-item--Diamante .timeline-item__badge { border-color: #00bcd4; background: #00bcd4; box-shadow: 0 0 10px #00bcd4; }
-.timeline-item--Mudanca .timeline-item__badge { border-color: #9c27b0; background: #9c27b0; box-shadow: 0 0 10px rgba(156, 39, 176, 0.5); }
+.timeline-item--Verde .timeline-item__badge { border-color: #22c55e; background: #22c55e; }
+.timeline-item--Amarelo .timeline-item__badge { border-color: #eab308; background: #eab308; }
+.timeline-item--Vermelho .timeline-item__badge { border-color: #ef4444; background: #ef4444; }
+.timeline-item--Diamante .timeline-item__badge { border-color: #3b82f6; background: #3b82f6; box-shadow: 0 0 10px #3b82f6; }
+.timeline-item--Mudanca .timeline-item__badge { border-color: #a855f7; background: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5); }
 
 .timeline-item__content {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--space-md);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.timeline-item__content:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: linear-gradient(135deg, var(--color-surface), rgba(255, 255, 255, 0.04));
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    transform: translateX(4px);
+}
+
+.timeline-item__delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.timeline-item__delete-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
 .timeline-item__header {
@@ -207,6 +324,7 @@
     margin-bottom: var(--space-sm);
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
+    padding-right: 28px;
 }
 
 .timeline-item__title {
@@ -229,6 +347,11 @@
     border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
     cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.timeline-item__img:hover {
+    transform: scale(1.05);
 }
 
 .timeline-item__anexo {
@@ -243,4 +366,77 @@
     text-decoration: none;
     font-size: var(--font-size-sm);
     margin-top: var(--space-sm);
+}
+
+/* ── Nova Grade de Cards Compactos Históricos (Inferiores) ── */
+.vps-historico-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-md, 16px);
+}
+
+.vps-historico-card-compact {
+    position: relative;
+    border-radius: 12px;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--color-surface, #121c38) 0%, rgba(15, 23, 42, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 110px;
+}
+
+.vps-historico-card-compact:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px var(--card-glow, rgba(0,0,0,0.35));
+    border-color: var(--card-border-hover, rgba(255, 255, 255, 0.2));
+}
+
+.vps-historico-card-compact__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.vps-historico-card-compact__badge {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 9px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vps-historico-card-compact__icon {
+    font-size: 22px;
+    opacity: 0.9;
+}
+
+.vps-historico-card-compact__value {
+    font-size: 2.2rem;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+}
+
+.vps-historico-card-compact__label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text, #ffffff);
+    margin-bottom: 2px;
+}
+
+.vps-historico-card-compact__subtext {
+    font-size: 0.74rem;
+    color: var(--color-text-muted, #94a3b8);
+    font-weight: 500;
 }

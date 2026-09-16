@@ -1,0 +1,1398 @@
+/* =====================================================
+   OMEGA SAFETY — Módulo Inspeções (inspecoes.css)
+   ===================================================== */
+
+@import './variables.css';
+
+/* ── Toolbar (busca + botão) ── */
+.insp-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+.insp-search {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+}
+
+.insp-search__icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-muted);
+    font-size: 14px;
+    pointer-events: none;
+}
+
+.insp-search__input {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-input);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    transition: border-color var(--transition-fast);
+}
+
+.insp-search__input:focus {
+    outline: none;
+    border-color: var(--color-red-primary);
+    box-shadow: 0 0 0 2px rgba(139, 28, 49, 0.15);
+}
+
+/* ── Tabela de Cadernos ── */
+.insp-table-wrap {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    position: relative;
+}
+
+.insp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+}
+
+.insp-table thead {
+    background: var(--color-bg-hover);
+}
+
+.insp-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.insp-table td {
+    padding: 14px 16px;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+}
+
+.insp-table tbody tr {
+    transition: background var(--transition-fast);
+}
+
+.insp-table tbody tr:hover {
+    background: var(--color-bg-hover);
+}
+
+.insp-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ── Status Badge ── */
+.insp-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.insp-status--ativo {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+}
+
+.insp-status--inativo {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+/* ── Menu de Três Pontos ── */
+.insp-actions {
+    position: relative;
+}
+
+.insp-actions__btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 6px 10px;
+    font-size: 16px;
+    line-height: 1;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+}
+
+.insp-actions__btn:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+    border-color: var(--color-red-primary);
+}
+
+.insp-actions__menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    min-width: 170px;
+    z-index: 9999;
+}
+
+.insp-actions__menu.open {
+    display: block;
+    animation: inspFadeIn 0.15s ease;
+}
+
+.insp-actions__menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+}
+
+.insp-actions__menu-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.insp-actions__menu-item--danger {
+    color: #ef4444;
+}
+
+.insp-actions__menu-item--danger:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+@keyframes inspFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Cards de Caderno (Aba Registros) ── */
+.caderno-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.caderno-select-card {
+    background: var(--color-bg-card);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: center;
+}
+
+.caderno-select-card:hover {
+    border-color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.04);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(139, 28, 49, 0.1);
+}
+
+.caderno-select-card__icon {
+    font-size: 36px;
+    margin-bottom: var(--space-md);
+}
+
+.caderno-select-card__title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-xs);
+}
+
+.caderno-select-card__info {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+/* ── Formulário de Checklist ── */
+.checklist-container {
+    max-width: 800px;
+}
+
+.checklist-header {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    margin-bottom: var(--space-lg);
+}
+
+.checklist-header__title {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-md);
+}
+
+.checklist-header__meta {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    display: flex;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+.checklist-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.checklist-question {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-lg);
+    transition: border-color var(--transition-fast);
+}
+
+.checklist-question:hover {
+    border-color: rgba(139, 28, 49, 0.3);
+}
+
+.checklist-question--critica {
+    border-left: 3px solid var(--color-red-primary);
+}
+
+.checklist-question__number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.checklist-question--critica .checklist-question__number {
+    background: rgba(139, 28, 49, 0.15);
+    color: var(--color-red-primary);
+}
+
+.checklist-question__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.checklist-question__text {
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-sm);
+    line-height: 1.5;
+}
+
+.checklist-question__badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.1);
+    padding: 2px 8px;
+    border-radius: 100px;
+    display: inline-block;
+    margin-bottom: var(--space-sm);
+}
+
+.checklist-question__options {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.checklist-option {
+    padding: 6px 16px;
+    border-radius: 100px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-card);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.checklist-option:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.checklist-option.selected {
+    border-color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.12);
+    color: var(--color-red-primary);
+}
+
+.checklist-option.selected[data-value="ok"] {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+}
+
+.checklist-option.selected[data-value="nok"] {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.checklist-question__obs {
+    margin-top: var(--space-sm);
+}
+
+.checklist-question__obs textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-input);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.checklist-question__obs textarea:focus {
+    outline: none;
+    border-color: var(--color-red-primary);
+    box-shadow: 0 0 0 2px rgba(139, 28, 49, 0.15);
+}
+
+/* ── Modal Form Layout ── */
+.caderno-form-row {
+    display: flex;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+}
+
+.caderno-form-field {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Seção de Perguntas no Modal ── */
+.caderno-perguntas-section {
+    margin-bottom: var(--space-lg);
+}
+
+.caderno-perguntas-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-md);
+}
+
+.caderno-perguntas-counter {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.1);
+    padding: 3px 10px;
+    border-radius: 100px;
+}
+
+.caderno-perguntas-list {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm);
+    margin-bottom: var(--space-md);
+    background: var(--color-bg-hover);
+}
+
+.caderno-perguntas-empty {
+    text-align: center;
+    padding: var(--space-xl);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.caderno-pergunta-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: 10px 12px;
+    background: var(--color-bg-card);
+    border-radius: var(--radius-md);
+    margin-bottom: 6px;
+    border: 1px solid transparent;
+    transition: border-color var(--transition-fast);
+}
+
+.caderno-pergunta-item:last-child {
+    margin-bottom: 0;
+}
+
+.caderno-pergunta-item:hover {
+    border-color: var(--color-border);
+}
+
+.caderno-pergunta-item__num {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-text-muted);
+    min-width: 20px;
+}
+
+.caderno-pergunta-item__text {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    line-height: 1.4;
+}
+
+.caderno-pergunta-item__critica {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.1);
+    padding: 2px 8px;
+    border-radius: 100px;
+    white-space: nowrap;
+}
+
+.caderno-pergunta-item__remove {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    line-height: 1;
+}
+
+.caderno-pergunta-item__remove:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Campo de Adicionar Pergunta ── */
+.caderno-add-pergunta {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+}
+
+.caderno-critica-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.caderno-critica-check input[type="checkbox"] {
+    accent-color: var(--color-red-primary);
+    width: 16px;
+    height: 16px;
+}
+
+.caderno-add-pergunta-hint {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-top: 6px;
+    font-style: italic;
+}
+
+/* ── Botão Voltar ── */
+.btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    padding: var(--space-sm) 0;
+    margin-bottom: var(--space-lg);
+    transition: color var(--transition-fast);
+}
+
+.btn-back:hover {
+    color: var(--color-text-primary);
+}
+
+/* ── Dashboard Placeholder ── */
+.dash-placeholder {
+    text-align: center;
+    padding: 80px var(--space-xl);
+    background: var(--color-bg-card);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.dash-placeholder__icon {
+    font-size: 48px;
+    margin-bottom: var(--space-lg);
+    opacity: 0.6;
+}
+
+.dash-placeholder__title {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.dash-placeholder__desc {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* ── Stats Row ── */
+.insp-stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+.insp-stat-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    text-align: center;
+}
+
+.insp-stat-card__value {
+    font-size: var(--font-size-xl);
+    font-weight: 800;
+    color: var(--color-red-primary);
+    margin-bottom: var(--space-xs);
+}
+
+.insp-stat-card__label {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ── View Modal (somente leitura) ── */
+.caderno-view__section {
+    margin-bottom: var(--space-lg);
+}
+
+.caderno-view__label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-xs);
+}
+
+.caderno-view__value {
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+}
+
+.caderno-view__perguntas {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.caderno-view__perguntas li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: 10px 12px;
+    background: var(--color-bg-hover);
+    border-radius: var(--radius-md);
+    margin-bottom: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+}
+
+.caderno-view__perguntas li .num {
+    font-weight: 700;
+    color: var(--color-text-muted);
+    min-width: 20px;
+}
+
+.caderno-view__perguntas li .interditivo {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.1);
+    padding: 1px 6px;
+    border-radius: 100px;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* ── Título de Seção (aba Gestão) ── */
+.insp-section-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-lg);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Lixeira (tabela inferior) ── */
+.lixeira-section {
+    margin-top: var(--space-xl);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.lixeira-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--color-bg-hover);
+    user-select: none;
+}
+
+.lixeira-header__icon {
+    font-size: 16px;
+}
+
+.lixeira-header__title {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-text-secondary);
+}
+
+.lixeira-body {
+    background: var(--color-bg-card);
+}
+
+.lixeira-table {
+    margin: 0;
+}
+
+.lixeira-table thead {
+    background: var(--color-bg-hover);
+}
+
+.lixeira-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.lixeira-table td {
+    padding: 14px 16px;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    font-size: var(--font-size-sm);
+}
+
+.lixeira-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.lixeira-table tbody tr:hover {
+    background: var(--color-bg-hover);
+}
+
+/* ── Botão Danger ── */
+.btn--danger {
+    background: #ef4444;
+    color: #fff;
+    border: 1px solid #ef4444;
+    border-radius: var(--radius-md);
+    padding: 6px 14px;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+}
+
+.btn--danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.btn--sm {
+    padding: 5px 12px;
+    font-size: 11px;
+}
+
+/* ── Registros / Rotina — Header com botão ── */
+.insp-registros-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+/* ── Células de foto (Módulo 3) ── */
+.insp-foto-cells {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-md);
+}
+
+@media (max-width: 720px) {
+    .insp-foto-cells {
+        grid-template-columns: 1fr;
+    }
+}
+
+.insp-foto-cell .upload-zone {
+    min-height: 140px;
+}
+
+.insp-btn-nova {
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(139, 28, 49, 0.28);
+}
+
+/* ── Cards de Inspeção (padrão N3) ── */
+.insp-card {
+    position: relative;
+}
+
+.insp-card-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.insp-card-status--ok {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+}
+
+.insp-card-status--nok {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+.insp-card-status--pending {
+    background: rgba(234, 179, 8, 0.12);
+    color: #eab308;
+}
+
+/* ── Modal Nova Inspeção ── */
+.insp-conclusao-hint {
+    margin: 8px 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+@keyframes insp-pulse-interdicao {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.insp-conclusao--interdicao {
+    animation: insp-pulse-interdicao 1.5s ease-in-out 3;
+    border-width: 2px;
+}
+
+.modal-scroll-body {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-right: var(--space-sm);
+}
+
+/* ── Preview de Fotos ── */
+.insp-fotos-preview {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+    margin-top: var(--space-sm);
+}
+
+.insp-foto-thumb {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 4/3;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 2px solid var(--color-border);
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.insp-foto-thumb:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+.insp-foto-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.insp-foto-thumb button {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.65);
+    border: none;
+    color: #fff;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Wizard Stepper ── */
+.insp-wizard-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: var(--space-lg) var(--space-xl);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.insp-wizard-step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    opacity: 0.4;
+    transition: opacity var(--transition-fast);
+}
+
+.insp-wizard-step.active {
+    opacity: 1;
+}
+
+.insp-wizard-step.completed {
+    opacity: 0.7;
+}
+
+.insp-wizard-step__number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-bg-hover);
+    border: 2px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    transition: all var(--transition-fast);
+}
+
+.insp-wizard-step.active .insp-wizard-step__number {
+    background: var(--color-red-primary);
+    border-color: var(--color-red-primary);
+    color: #fff;
+}
+
+.insp-wizard-step.completed .insp-wizard-step__number {
+    background: #22c55e;
+    border-color: #22c55e;
+    color: #fff;
+}
+
+.insp-wizard-step__label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+.insp-wizard-step.active .insp-wizard-step__label {
+    color: var(--color-text-primary);
+    font-weight: 700;
+}
+
+.insp-wizard-step__line {
+    width: 40px;
+    height: 2px;
+    background: var(--color-border);
+    margin: 0 var(--space-sm);
+    transition: background var(--transition-fast);
+}
+
+.insp-wizard-step__line.completed {
+    background: #22c55e;
+}
+
+/* ── Wizard Panels ── */
+.insp-wizard-panel {
+    display: none;
+}
+
+.insp-wizard-panel.active {
+    display: block;
+    animation: n3FadeIn 0.25s ease;
+}
+
+/* ── Wizard Actions ── */
+.insp-wizard-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: var(--space-lg);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-lg);
+}
+
+.insp-wizard-actions__right {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+/* ── Checklist do Wizard (Módulo 2) ── */
+.insp-checklist-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-md);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-sm);
+    transition: border-color var(--transition-fast);
+}
+
+.insp-checklist-item:hover {
+    border-color: rgba(139, 28, 49, 0.3);
+}
+
+.insp-checklist-item--critica {
+    border-left: 3px solid var(--color-red-primary);
+}
+
+.insp-checklist-item__number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-bg-hover);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+.insp-checklist-item--critica .insp-checklist-item__number {
+    background: rgba(139, 28, 49, 0.15);
+    color: var(--color-red-primary);
+}
+
+.insp-checklist-item__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.insp-checklist-item__text {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-xs);
+    line-height: 1.5;
+}
+
+.insp-checklist-item__badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-red-primary);
+    background: rgba(139, 28, 49, 0.1);
+    padding: 2px 8px;
+    border-radius: 100px;
+    display: inline-block;
+    margin-bottom: var(--space-xs);
+}
+
+.insp-checklist-item__options {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-xs);
+}
+
+.insp-checklist-item__obs textarea {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-input);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-xs);
+    font-family: inherit;
+    resize: vertical;
+    min-height: 28px;
+}
+
+.insp-checklist-item__obs textarea:focus {
+    outline: none;
+    border-color: var(--color-red-primary);
+    box-shadow: 0 0 0 2px rgba(139, 28, 49, 0.15);
+}
+
+/* ── Responsivo ── */
+@media (max-width: 768px) {
+    .caderno-form-row {
+        flex-direction: column;
+    }
+
+    .caderno-add-pergunta {
+        flex-wrap: wrap;
+    }
+
+    .insp-table th:nth-child(4),
+    .insp-table td:nth-child(4) {
+        display: none;
+    }
+}
+
+/* ── Lightbox de Fotos ── */
+.insp-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.insp-lightbox--active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.insp-lightbox__img {
+    max-width: 92vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    transform: scale(0.92);
+    transition: transform 0.25s ease;
+}
+
+.insp-lightbox--active .insp-lightbox__img {
+    transform: scale(1);
+}
+
+.insp-lightbox__close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast);
+    backdrop-filter: blur(4px);
+}
+
+.insp-lightbox__close:hover {
+    background: rgba(239, 68, 68, 0.8);
+}
+
+.insp-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition-fast);
+    backdrop-filter: blur(4px);
+}
+
+.insp-lightbox__nav:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.insp-lightbox__nav--prev { left: 16px; }
+.insp-lightbox__nav--next { right: 16px; }
+
+.insp-lightbox__counter {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* ══════════════════════════════════════════════════════
+   DASHBOARD DE INSPEÇÕES — Gráficos e Indicadores
+   ══════════════════════════════════════════════════════ */
+
+/* ── Grid principal (2 colunas) ── */
+.dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-xl);
+    margin-bottom: var(--space-xl);
+}
+
+.dash-grid--full {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 1100px) {
+    .dash-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Indicadores de Conclusão Técnica ── */
+.dash-indicators {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-xl);
+}
+
+@media (max-width: 900px) {
+    .dash-indicators { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 500px) {
+    .dash-indicators { grid-template-columns: 1fr; }
+}
+
+.dash-indicator-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg) var(--space-xl);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.dash-indicator-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.dash-indicator-card--active {
+    border: 2px solid var(--ind-color) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 0 16px rgba(0, 0, 0, 0.35), inset 0 0 10px rgba(255, 255, 255, 0.03) !important;
+    transform: translateY(-2px) !important;
+    opacity: 1 !important;
+}
+
+.dash-indicator-card--dimmed {
+    opacity: 0.55 !important;
+}
+
+.dash-indicator-card--dimmed:hover {
+    opacity: 0.85 !important;
+}
+
+.dash-indicator-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--ind-color, var(--color-border));
+}
+
+.dash-indicator-card__value {
+    font-size: var(--font-size-3xl);
+    font-weight: 800;
+    color: var(--ind-color, var(--color-text-primary));
+    line-height: 1.1;
+    margin-bottom: var(--space-xs);
+}
+
+.dash-indicator-card__label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* ── Box de Gráfico ── */
+.dash-chart-box {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    overflow: hidden;
+}
+
+.dash-chart-box__title {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-md);
+    padding-bottom: var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.dash-chart-box__body {
+    position: relative;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dash-chart-box__body canvas {
+    max-width: 100%;
+}
+
+/* ── Treemap Container ── */
+.dash-treemap-wrap {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+}
+
+/* ── Tooltip do Treemap ── */
+.dash-treemap-tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 100;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    padding: 10px 14px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.6);
+    color: #f4f4f5;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    display: none;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.dash-treemap-tooltip__name {
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.dash-treemap-tooltip__stat {
+    color: #a1a1aa;
+    font-size: 12px;
+}
+
+.dash-treemap-tooltip__stat strong {
+    color: #38bdf8;
+}
+
+/* ── Mensagem de vazio ── */
+.dash-empty {
+    text-align: center;
+    padding: var(--space-2xl) var(--space-xl);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.dash-empty__icon {
+    font-size: 36px;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}

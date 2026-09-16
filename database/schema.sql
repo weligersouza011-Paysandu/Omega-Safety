@@ -152,3 +152,82 @@ CREATE TABLE IF NOT EXISTS n3_historico (
 );
 
 CREATE INDEX IF NOT EXISTS idx_n3_historico_n3id ON n3_historico(n3_id);
+
+-- ------------------------------------------------------------
+-- CADERNOS DE INSPEÇÃO (Modelos criados pelo ADM)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cadernos_inspecao (
+    id              TEXT PRIMARY KEY,  -- UUID
+    nome            TEXT NOT NULL,
+    contrato        TEXT,
+    subcategoria    TEXT,
+    categoria       TEXT,
+    status          TEXT NOT NULL DEFAULT 'ativo'
+                           CHECK(status IN ('ativo','inativo')),
+    criado_por      TEXT,             -- Matrícula do ADM
+    atualizado_por  TEXT,
+    excluido_em     DATETIME,         -- Quando foi movido para a lixeira
+    excluido_por    TEXT,             -- Matrícula de quem excluiu
+    created_at      DATETIME DEFAULT (datetime('now','localtime')),
+    updated_at      DATETIME
+);
+
+-- ------------------------------------------------------------
+-- PERGUNTAS DO CADERNO
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS perguntas_caderno (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    caderno_id              TEXT NOT NULL,
+    texto_pergunta          TEXT NOT NULL,
+    eh_critico_interditivo  INTEGER DEFAULT 0,  -- 0 = não, 1 = sim
+    ordem                   INTEGER DEFAULT 0,
+    criado_em               DATETIME DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- RESPOSTAS / INSPEÇÕES PREENCHIDAS (Registros / Rotina)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS caderno_respostas (
+    id                  TEXT PRIMARY KEY,  -- UUID
+    caderno_id          TEXT NOT NULL,
+    matricula           TEXT NOT NULL,
+    nome_inspetor       TEXT NOT NULL,
+    data_inspecao       DATE NOT NULL DEFAULT (date('now','localtime')),
+    data_ocorrido       DATETIME,
+    contrato            TEXT,
+    lideranca           TEXT,
+    local               TEXT,
+    descricao           TEXT,
+    conclusao_tecnica   TEXT,
+    respostas_json      TEXT NOT NULL,     -- JSON com {pergunta_id: 'ok'/'nok'/'na', observacao: '...'}
+    observacoes         TEXT,
+    foto_path           TEXT,
+    foto_2_path         TEXT,
+    foto_3_path         TEXT,
+    subcategoria        TEXT,
+    categoria           TEXT,
+    criado_em           DATETIME DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- HISTÓRICO DE ALTERAÇÕES DO CADERNO (Auditoria)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS historico_cadernos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    caderno_id      TEXT NOT NULL,
+    usuario         TEXT NOT NULL,     -- Matrícula do usuário
+    acao            TEXT NOT NULL,     -- 'criado', 'editado', 'duplicado', 'excluído'
+    timestamp       DATETIME DEFAULT (datetime('now','localtime')),
+    detalhes        TEXT,
+    FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- ÍNDICES PARA CADERNOS DE INSPEÇÃO
+-- ------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_perguntas_caderno_caderno    ON perguntas_caderno(caderno_id);
+CREATE INDEX IF NOT EXISTS idx_caderno_respostas_caderno    ON caderno_respostas(caderno_id);
+CREATE INDEX IF NOT EXISTS idx_caderno_respostas_data       ON caderno_respostas(data_inspecao);
+CREATE INDEX IF NOT EXISTS idx_historico_cadernos_caderno   ON historico_cadernos(caderno_id);

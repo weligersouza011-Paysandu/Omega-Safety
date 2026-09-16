@@ -40,8 +40,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Servir uploads como estáticos (apenas o caminho é gravado no banco)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Servir imagens oficias da marca
-app.use('/Logo', express.static(path.join(__dirname, 'Logo')));
+// Middleware Anti-Cache estrito para todas as rotas de API
+app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    next();
+});
 
 // ────────────────────────────────────────────────
 //  Rotas da API
@@ -50,6 +56,7 @@ app.use('/api/auth',      require('./routes/auth'));
 app.use('/api/n3',        require('./routes/n3'));
 app.use('/api/treinamentos', require('./routes/trainings'));
 app.use('/api/inspecoes', require('./routes/inspections'));
+app.use('/api/cadernos',  require('./routes/cadernos'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/vps', require('./routes/vps'));
 

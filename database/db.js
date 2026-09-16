@@ -47,6 +47,38 @@ async function initDB() {
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT'); } catch(e){}
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
+
+    // Garantir que as colunas de lixeira existem na tabela cadernos_inspecao
+    const cadernoCols = await db.allAsync("PRAGMA table_info(cadernos_inspecao)");
+    const hasExcluidoEm  = cadernoCols.some(c => c.name === 'excluido_em');
+    const hasExcluidoPor = cadernoCols.some(c => c.name === 'excluido_por');
+    if (!hasExcluidoEm) {
+        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN excluido_em DATETIME"); } catch(e){}
+        console.log('[DB] Coluna excluido_em adicionada.');
+    }
+    if (!hasExcluidoPor) {
+        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN excluido_por TEXT"); } catch(e){}
+        console.log('[DB] Coluna excluido_por adicionada.');
+    }
+    if (!cadernoCols.some(c => c.name === 'subcategoria')) {
+        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN subcategoria TEXT"); } catch(e){}
+    }
+    if (!cadernoCols.some(c => c.name === 'categoria')) {
+        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN categoria TEXT"); } catch(e){}
+    }
+
+    // Garantir colunas novas na tabela caderno_respostas
+    const respostasCols = await db.allAsync("PRAGMA table_info(caderno_respostas)");
+    const respColNames = respostasCols.map(c => c.name);
+    if (!respColNames.includes('data_ocorrido'))    { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN data_ocorrido DATETIME"); } catch(e){} }
+    if (!respColNames.includes('contrato'))          { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN contrato TEXT"); } catch(e){} }
+    if (!respColNames.includes('lideranca'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN lideranca TEXT"); } catch(e){} }
+    if (!respColNames.includes('descricao'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN descricao TEXT"); } catch(e){} }
+    if (!respColNames.includes('conclusao_tecnica')) { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN conclusao_tecnica TEXT"); } catch(e){} }
+    if (!respColNames.includes('foto_2_path'))       { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN foto_2_path TEXT"); } catch(e){} }
+    if (!respColNames.includes('foto_3_path'))       { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN foto_3_path TEXT"); } catch(e){} }
+    if (!respColNames.includes('subcategoria'))      { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN subcategoria TEXT"); } catch(e){} }
+    if (!respColNames.includes('categoria'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN categoria TEXT"); } catch(e){} }
     
     console.log('[DB] Schema inicializado e migrado.');
 

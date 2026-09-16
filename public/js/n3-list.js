@@ -32,6 +32,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Carregar N3 ──
     loadN3();
 
+    if (typeof window.onGlobalChange === 'function') {
+        window.onGlobalChange(async () => {
+            if (typeof loadN3 === 'function') {
+                loadN3();
+            }
+        });
+    }
+
     // ── Modal ──
     document.getElementById('btn-fechar-modal').addEventListener('click', closeModal);
     document.getElementById('detail-modal').addEventListener('click', e => {

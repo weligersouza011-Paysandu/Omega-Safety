@@ -28,20 +28,32 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
-// GET /api/vps/canteiros - Listar canteiros (Usado no Form de N3 e no Dashboard VPS)
-// O N3 precisa buscar as obras em andamento, por isso não usamos requireAdm aqui
+// GET /api/vps/canteiros - Listar canteiros (com subquery do último card recebido)
 router.get('/canteiros', requireAuth, async (req, res) => {
     try {
         const { status } = req.query;
-        let sql = 'SELECT * FROM vps_canteiros';
+        let sql = `
+            SELECT c.*, 
+              (SELECT h.tipo_card 
+               FROM vps_historico h 
+               WHERE h.canteiro_id = c.id AND h.tipo_card != 'N/A' 
+               ORDER BY h.data_registro DESC, h.criado_em DESC 
+               LIMIT 1) as ultimo_card,
+              (SELECT h.data_registro 
+               FROM vps_historico h 
+               WHERE h.canteiro_id = c.id AND h.tipo_card != 'N/A' 
+               ORDER BY h.data_registro DESC, h.criado_em DESC 
+               LIMIT 1) as ultimo_card_data
+            FROM vps_canteiros c
+        `;
         let params = [];
         
         if (status) {
-            sql += ' WHERE status = ?';
+            sql += ' WHERE c.status = ?';
             params.push(status);
         }
         
-        sql += ' ORDER BY nome ASC';
+        sql += ' ORDER BY c.nome ASC';
         
         const canteiros = await db.allAsync(sql, params);
         res.json(canteiros);
@@ -56,21 +68,37 @@ router.get('/stats', requireAdm, async (req, res) => {
     try {
         const totalAndamento = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Em andamento'");
         const totalConcluidas = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Concluída'");
+        const totalParalisadas = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Paralisada'");
         
-        const mat1 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 1 AND status != 'Concluída'");
-        const mat2 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 2 AND status != 'Concluída'");
-        const mat3 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 3 AND status != 'Concluída'");
-        const mat4 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 4 AND status != 'Concluída'");
+        // Maturidades 0 a 4 ESTRITAMENTE para obras com status 'Em andamento'
+        const mat0 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 0 AND status = 'Em andamento'");
+        const mat1 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 1 AND status = 'Em andamento'");
+        const mat2 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 2 AND status = 'Em andamento'");
+        const mat3 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 3 AND status = 'Em andamento'");
+        const mat4 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 4 AND status = 'Em andamento'");
+
+        // Contagem consolidada do histórico de cards emitidos
+        const cardsDiamante = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Diamante'");
+        const cardsVerde = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Verde'");
+        const cardsAmarelo = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Amarelo'");
+        const cardsVermelho = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Vermelho'");
 
         res.json({
-            emAndamento: totalAndamento.count,
-            concluidas: totalConcluidas.count,
-            maturidade1: mat1.count,
-            maturidade2: mat2.count,
-            maturidade3: mat3.count,
-            maturidade4: mat4.count
+            emAndamento: totalAndamento ? totalAndamento.count : 0,
+            concluidas: totalConcluidas ? totalConcluidas.count : 0,
+            paralisadas: totalParalisadas ? totalParalisadas.count : 0,
+            maturidade0: mat0 ? mat0.count : 0,
+            maturidade1: mat1 ? mat1.count : 0,
+            maturidade2: mat2 ? mat2.count : 0,
+            maturidade3: mat3 ? mat3.count : 0,
+            maturidade4: mat4 ? mat4.count : 0,
+            cardsDiamante: cardsDiamante ? cardsDiamante.count : 0,
+            cardsVerde: cardsVerde ? cardsVerde.count : 0,
+            cardsAmarelo: cardsAmarelo ? cardsAmarelo.count : 0,
+            cardsVermelho: cardsVermelho ? cardsVermelho.count : 0
         });
     } catch (err) {
+        console.error('[VPS] Erro ao carregar estatísticas:', err);
         res.status(500).json({ error: 'Erro ao carregar estatísticas' });
     }
 });
@@ -80,7 +108,7 @@ router.post('/canteiros', requireAdm, upload.fields([{ name: 'capa_1', maxCount:
     try {
         const { nome, status, maturidade_inicial } = req.body;
         const id = crypto.randomUUID();
-        const maturidade = maturidade_inicial ? parseInt(maturidade_inicial, 10) : 1;
+        const maturidade = (maturidade_inicial !== undefined && maturidade_inicial !== '') ? parseInt(maturidade_inicial, 10) : 1;
         
         let capa1Path = null;
         let capa2Path = null;
@@ -108,10 +136,15 @@ router.post('/canteiros', requireAdm, upload.fields([{ name: 'capa_1', maxCount:
 router.put('/canteiros/:id', requireAdm, upload.fields([{ name: 'capa_1', maxCount: 1 }, { name: 'capa_2', maxCount: 1 }]), async (req, res) => {
     try {
         const { id } = req.params;
-        const { nome, status } = req.body;
+        const { nome, status, maturidade } = req.body;
         
         let updates = ['nome = ?', 'status = ?'];
         let params = [nome, status];
+
+        if (maturidade !== undefined && maturidade !== '') {
+            updates.push('maturidade = ?');
+            params.push(parseInt(maturidade, 10));
+        }
 
         if (req.files && req.files.capa_1) {
             updates.push('capa_1_path = ?');
@@ -198,6 +231,18 @@ router.post('/historico', requireAdm, upload.fields([
     } catch (err) {
         console.error('[VPS] Erro ao salvar histórico:', err);
         res.status(500).json({ error: 'Erro ao salvar registro de maturidade' });
+    }
+});
+
+// DELETE /api/vps/historico/:id - Excluir evento do histórico (Apenas ADM)
+router.delete('/historico/:id', requireAdm, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.runAsync('DELETE FROM vps_historico WHERE id = ?', [id]);
+        res.json({ message: 'Registro de histórico excluído com sucesso!' });
+    } catch (err) {
+        console.error('[VPS] Erro ao excluir registro do histórico:', err);
+        res.status(500).json({ error: 'Erro ao excluir registro do histórico' });
     }
 });
 
