@@ -17,20 +17,43 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Sessões persistidas no SQLite
+let sessionStore;
+if (process.env.DATABASE_URL) {
+    try {
+        const pgSimple = require('connect-pg-simple')(session);
+        const { Pool } = require('pg');
+        sessionStore = new pgSimple({
+            pool: new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: { rejectUnauthorized: false }
+            }),
+            tableName: 'user_sessions',
+            createTableIfMissing: true
+        });
+        console.log('[SESSION] Conector PostgreSQL para sessões ativado.');
+    } catch (e) {
+        console.warn('[SESSION] MemoryStore ativado como fallback:', e.message);
+    }
+} else {
+    const sqlite3 = require('sqlite3');
+    const SQLiteStore = require('connect-sqlite3')(session);
+    sessionStore = new SQLiteStore({
+        sqlite3: sqlite3,
+        db: 'sessions.db',
+        dir: path.join(__dirname, 'database'),
+    });
+    console.log('[SESSION] Conector SQLite local para sessões ativado.');
+}
+
 app.use(session({
-    store: new SQLiteStore({
-        sqlite3:           sqlite3,
-        db:                'sessions.db',
-        dir:               path.join(__dirname, 'database'),
-    }),
-    secret:            process.env.SESSION_SECRET || 'omega_safety_secret',
-    resave:            false,
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || 'omega_safety_secret',
+    resave: false,
     saveUninitialized: false,
     cookie: {
-        secure:   false,          // true em produção com HTTPS
+        secure: false, // true em produção se HTTPS estrito
         httpOnly: true,
-        maxAge:   8 * 60 * 60 * 1000, // 8 horas (turno de trabalho)
+        maxAge: 8 * 60 * 60 * 1000, // 8 horas
     },
 }));
 

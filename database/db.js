@@ -1,128 +1,320 @@
-// database/db.js — Inicialização e conexão do SQLite (usando sqlite3 com prebuilt binaries)
-const sqlite3 = require('sqlite3').verbose();
-const path    = require('path');
-const fs      = require('fs');
-const bcrypt  = require('bcryptjs');
+// database/db.js — Suporte dual: PostgreSQL (Render/Produção) / SQLite (Desenvolvimento Local)
+const path   = require('path');
+const fs     = require('fs');
+const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'omega_safety.db');
+let db = {};
+const isPostgres = !!process.env.DATABASE_URL;
 
-// ────────────────────────────────────────────────
-//  Cria a conexão
-// ────────────────────────────────────────────────
-const db = new sqlite3.Database(DB_PATH, (err) => {
-    if (err) { console.error('[DB] Erro ao abrir banco:', err.message); process.exit(1); }
-    console.log('[DB] Conectado ao SQLite em', DB_PATH);
-});
+function convertPlaceholders(sql) {
+    if (typeof sql !== 'string') return sql;
+    let index = 1;
+    return sql.replace(/\?/g, () => `$${index++}`);
+}
 
-// ────────────────────────────────────────────────
-//  Helper: promisify db.run, db.get, db.all
-// ────────────────────────────────────────────────
-db.runAsync  = (sql, params=[]) => new Promise((res,rej) =>
-    db.run(sql, params, function(err){ err ? rej(err) : res(this); }));
+if (isPostgres) {
+    console.log('[DB] Conectando ao PostgreSQL (DATABASE_URL ativa)...');
+    const { Pool } = require('pg');
+    const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+    });
 
-db.getAsync  = (sql, params=[]) => new Promise((res,rej) =>
-    db.get(sql, params, (err,row) => err ? rej(err) : res(row)));
+    pool.on('error', (err) => {
+        console.error('[DB] Erro no pool PostgreSQL:', err);
+    });
 
-db.allAsync  = (sql, params=[]) => new Promise((res,rej) =>
-    db.all(sql, params, (err,rows) => err ? rej(err) : res(rows)));
+    db.runAsync = async (sql, params = []) => {
+        if (sql.trim().toUpperCase().startsWith('PRAGMA')) return { changes: 0 };
+        const converted = convertPlaceholders(sql);
+        const res = await pool.query(converted, params);
+        return { lastID: res.rows[0]?.id || null, changes: res.rowCount };
+    };
 
-db.execAsync = (sql) => new Promise((res,rej) =>
-    db.exec(sql, (err) => err ? rej(err) : res()));
+    db.getAsync = async (sql, params = []) => {
+        if (sql.trim().toUpperCase().startsWith('PRAGMA')) return null;
+        const converted = convertPlaceholders(sql);
+        const res = await pool.query(converted, params);
+        return res.rows[0] || null;
+    };
 
-// ────────────────────────────────────────────────
-//  Inicialização do Schema + Seed
-// ────────────────────────────────────────────────
+    db.allAsync = async (sql, params = []) => {
+        if (sql.trim().toUpperCase().startsWith('PRAGMA')) return [];
+        const converted = convertPlaceholders(sql);
+        const res = await pool.query(converted, params);
+        return res.rows || [];
+    };
+
+    db.execAsync = async (sql) => {
+        if (sql.trim().toUpperCase().startsWith('PRAGMA')) return;
+        return await pool.query(sql);
+    };
+
+    db.pool = pool;
+
+} else {
+    console.log('[DB] Conectando ao SQLite local...');
+    const sqlite3 = require('sqlite3').verbose();
+    const DB_PATH = path.join(__dirname, 'omega_safety.db');
+
+    const sqliteDb = new sqlite3.Database(DB_PATH, (err) => {
+        if (err) { console.error('[DB] Erro ao abrir SQLite:', err.message); process.exit(1); }
+        console.log('[DB] Conectado ao SQLite em', DB_PATH);
+    });
+
+    db.runAsync  = (sql, params=[]) => new Promise((res,rej) =>
+        sqliteDb.run(sql, params, function(err){ err ? rej(err) : res(this); }));
+
+    db.getAsync  = (sql, params=[]) => new Promise((res,rej) =>
+        sqliteDb.get(sql, params, (err,row) => err ? rej(err) : res(row)));
+
+    db.allAsync  = (sql, params=[]) => new Promise((res,rej) =>
+        sqliteDb.all(sql, params, (err,rows) => err ? rej(err) : res(rows)));
+
+    db.execAsync = (sql) => new Promise((res,rej) =>
+        sqliteDb.exec(sql, (err) => err ? rej(err) : res()));
+}
+
 async function initDB() {
-    // WAL mode e foreign keys
-    await db.runAsync('PRAGMA journal_mode=WAL');
-    await db.runAsync('PRAGMA foreign_keys=ON');
+    if (isPostgres) {
+        console.log('[DB] Criando/verificando estrutura de tabelas PostgreSQL...');
+        const postgresSchema = `
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id            SERIAL PRIMARY KEY,
+            matricula     VARCHAR(255) NOT NULL UNIQUE,
+            nome          VARCHAR(255) NOT NULL,
+            funcao        VARCHAR(255),
+            lideranca     VARCHAR(255),
+            perfil        VARCHAR(50) NOT NULL DEFAULT 'operacional',
+            contrato      VARCHAR(255),
+            foto_perfil   TEXT,
+            senha_hash    TEXT,
+            ativo         INTEGER NOT NULL DEFAULT 1,
+            is_lideranca  INTEGER DEFAULT 0,
+            is_master     INTEGER DEFAULT 0,
+            criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
 
-    // Schema
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    const sql = fs.readFileSync(schemaPath, 'utf8');
-    await db.execAsync(sql); // Cria todas as tabelas (incluindo VPS se não existir)
-    
-    // Migrações automáticas seguras (ignora o erro se a coluna já existir)
-    try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN contrato TEXT'); } catch(e){}
-    try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT'); } catch(e){}
-    try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
-    try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
-    try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN contrato TEXT'); } catch(e){}
+        CREATE TABLE IF NOT EXISTS treinamentos (
+            id                SERIAL PRIMARY KEY,
+            matricula         VARCHAR(255) NOT NULL,
+            nome              VARCHAR(255) NOT NULL,
+            funcao            VARCHAR(255),
+            nome_treinamento  VARCHAR(255) NOT NULL,
+            data_realizacao   DATE,
+            data_vencimento   DATE,
+            criado_em         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (matricula) REFERENCES usuarios(matricula) ON UPDATE CASCADE ON DELETE CASCADE
+        );
 
-    // Garantir que as colunas de lixeira existem na tabela cadernos_inspecao
-    const cadernoCols = await db.allAsync("PRAGMA table_info(cadernos_inspecao)");
-    const hasExcluidoEm  = cadernoCols.some(c => c.name === 'excluido_em');
-    const hasExcluidoPor = cadernoCols.some(c => c.name === 'excluido_por');
-    if (!hasExcluidoEm) {
-        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN excluido_em DATETIME"); } catch(e){}
-        console.log('[DB] Coluna excluido_em adicionada.');
-    }
-    if (!hasExcluidoPor) {
-        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN excluido_por TEXT"); } catch(e){}
-        console.log('[DB] Coluna excluido_por adicionada.');
-    }
-    if (!cadernoCols.some(c => c.name === 'subcategoria')) {
-        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN subcategoria TEXT"); } catch(e){}
-    }
-    if (!cadernoCols.some(c => c.name === 'categoria')) {
-        try { await db.execAsync("ALTER TABLE cadernos_inspecao ADD COLUMN categoria TEXT"); } catch(e){}
+        CREATE TABLE IF NOT EXISTS n3_registros (
+            id                     VARCHAR(255) PRIMARY KEY,
+            data                   DATE DEFAULT CURRENT_DATE,
+            matricula_observador   VARCHAR(255) NOT NULL,
+            nome_observador        VARCHAR(255) NOT NULL,
+            lideranca              VARCHAR(255) NOT NULL,
+            nivel                  VARCHAR(50),
+            local_ss               VARCHAR(255) NOT NULL,
+            descricao_situacao     TEXT NOT NULL,
+            categoria              VARCHAR(255),
+            subcategoria           VARCHAR(255),
+            tag                    VARCHAR(255),
+            plano_acao             TEXT,
+            empresa_responsavel    VARCHAR(255),
+            lideranca_responsavel  VARCHAR(255),
+            prazo_vencimento       DATE,
+            status                 VARCHAR(50) DEFAULT 'Em Análise',
+            evidencia_1_path       TEXT,
+            evidencia_2_path       TEXT,
+            observacoes_adm        TEXT,
+            validado_por           VARCHAR(255),
+            validado_em            TIMESTAMP,
+            criado_em              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS inspecoes_avulsas (
+            id                VARCHAR(255) PRIMARY KEY,
+            data_inspecao     DATE DEFAULT CURRENT_DATE,
+            matricula         VARCHAR(255) NOT NULL,
+            nome_inspetor     VARCHAR(255) NOT NULL,
+            funcao            VARCHAR(255),
+            lideranca         VARCHAR(255),
+            local             VARCHAR(255),
+            categoria         VARCHAR(255),
+            subcategoria      VARCHAR(255),
+            placa_veiculo     VARCHAR(255),
+            tag               VARCHAR(255),
+            tipo_veiculo      VARCHAR(255),
+            descricao         TEXT,
+            conclusao_tecnica TEXT,
+            card_inspecao     VARCHAR(255),
+            plano_acao        TEXT,
+            prazo             DATE,
+            foto_path         TEXT,
+            criado_em         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vps_canteiros (
+            id            VARCHAR(255) PRIMARY KEY,
+            nome          VARCHAR(255) NOT NULL,
+            contrato      VARCHAR(255),
+            status        VARCHAR(50) DEFAULT 'Em andamento',
+            maturidade    INTEGER DEFAULT 1,
+            capa_1_path   TEXT,
+            capa_2_path   TEXT,
+            criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vps_historico (
+            id               VARCHAR(255) PRIMARY KEY,
+            canteiro_id      VARCHAR(255) NOT NULL,
+            id_inspecao      VARCHAR(255),
+            data_registro    DATE DEFAULT CURRENT_DATE,
+            categoria        VARCHAR(255) NOT NULL,
+            tipo_card        VARCHAR(255) NOT NULL,
+            descricao        TEXT,
+            evidencia_1_path TEXT,
+            evidencia_2_path TEXT,
+            anexo_path       TEXT,
+            criado_por       VARCHAR(255),
+            criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS vps_pendencias (
+            id            VARCHAR(255) PRIMARY KEY,
+            historico_id  VARCHAR(255),
+            canteiro_id   VARCHAR(255) NOT NULL,
+            item          TEXT NOT NULL,
+            adequacao     TEXT,
+            responsavel   VARCHAR(255),
+            data          DATE,
+            status        VARCHAR(50) DEFAULT 'Pendente',
+            criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS n3_historico (
+            id               SERIAL PRIMARY KEY,
+            n3_id            VARCHAR(255) NOT NULL,
+            data_hora        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            usuario_nome     VARCHAR(255) NOT NULL,
+            detalhes         TEXT NOT NULL,
+            FOREIGN KEY (n3_id) REFERENCES n3_registros(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS cadernos_inspecao (
+            id              VARCHAR(255) PRIMARY KEY,
+            nome            VARCHAR(255) NOT NULL,
+            contrato        VARCHAR(255),
+            subcategoria    VARCHAR(255),
+            categoria       VARCHAR(255),
+            status          VARCHAR(50) DEFAULT 'ativo',
+            criado_por      VARCHAR(255),
+            atualizado_por  VARCHAR(255),
+            excluido_em     TIMESTAMP,
+            excluido_por    VARCHAR(255),
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at      TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS perguntas_caderno (
+            id                      SERIAL PRIMARY KEY,
+            caderno_id              VARCHAR(255) NOT NULL,
+            texto_pergunta          TEXT NOT NULL,
+            eh_critico_interditivo  INTEGER DEFAULT 0,
+            ordem                   INTEGER DEFAULT 0,
+            criado_em               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS caderno_respostas (
+            id                  VARCHAR(255) PRIMARY KEY,
+            caderno_id          VARCHAR(255) NOT NULL,
+            matricula           VARCHAR(255) NOT NULL,
+            nome_inspetor       VARCHAR(255) NOT NULL,
+            data_inspecao       DATE DEFAULT CURRENT_DATE,
+            data_ocorrido       TIMESTAMP,
+            contrato            VARCHAR(255),
+            lideranca           VARCHAR(255),
+            local               VARCHAR(255),
+            descricao           TEXT,
+            conclusao_tecnica   TEXT,
+            respostas_json      TEXT NOT NULL,
+            observacoes         TEXT,
+            foto_path           TEXT,
+            foto_2_path         TEXT,
+            foto_3_path         TEXT,
+            subcategoria        VARCHAR(255),
+            categoria           VARCHAR(255),
+            criado_em           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS historico_cadernos (
+            id              SERIAL PRIMARY KEY,
+            caderno_id      VARCHAR(255) NOT NULL,
+            usuario         VARCHAR(255) NOT NULL,
+            acao            VARCHAR(255) NOT NULL,
+            timestamp       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            detalhes        TEXT,
+            FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+        `;
+
+        await db.execAsync(postgresSchema);
+
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_lideranca INTEGER DEFAULT 0'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_master INTEGER DEFAULT 0'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
+
+    } else {
+        await db.runAsync('PRAGMA journal_mode=WAL');
+        await db.runAsync('PRAGMA foreign_keys=ON');
+
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        const sql = fs.readFileSync(schemaPath, 'utf8');
+        await db.execAsync(sql);
+
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN contrato TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN contrato TEXT'); } catch(e){}
+
+        try {
+            const pendCols = await db.allAsync("PRAGMA table_info(vps_pendencias)");
+            const histCol = pendCols.find(c => c.name === 'historico_id');
+            if (histCol && histCol.notnull === 1) {
+                await db.execAsync('PRAGMA foreign_keys=OFF');
+                await db.execAsync(`
+                    CREATE TABLE IF NOT EXISTS vps_pendencias_new (
+                        id            TEXT PRIMARY KEY,
+                        historico_id  TEXT,
+                        canteiro_id   TEXT NOT NULL,
+                        item          TEXT NOT NULL,
+                        adequacao     TEXT,
+                        responsavel   TEXT,
+                        data          DATE,
+                        status        TEXT NOT NULL DEFAULT 'Pendente',
+                        criado_em     DATETIME DEFAULT (datetime('now','localtime')),
+                        FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                        FOREIGN KEY (historico_id) REFERENCES vps_historico(id) ON DELETE CASCADE ON UPDATE CASCADE
+                    );
+                    INSERT INTO vps_pendencias_new (id, historico_id, canteiro_id, item, adequacao, responsavel, data, status, criado_em)
+                    SELECT id, NULLIF(historico_id, ''), canteiro_id, item, adequacao, responsavel, data, status, criado_em FROM vps_pendencias;
+                    DROP TABLE vps_pendencias;
+                    ALTER TABLE vps_pendencias_new RENAME TO vps_pendencias;
+                `);
+                await db.execAsync('PRAGMA foreign_keys=ON');
+            }
+        } catch(e){}
     }
 
-    // Garantir colunas novas na tabela caderno_respostas
-    const respostasCols = await db.allAsync("PRAGMA table_info(caderno_respostas)");
-    const respColNames = respostasCols.map(c => c.name);
-    if (!respColNames.includes('data_ocorrido'))    { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN data_ocorrido DATETIME"); } catch(e){} }
-    if (!respColNames.includes('contrato'))          { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN contrato TEXT"); } catch(e){} }
-    if (!respColNames.includes('lideranca'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN lideranca TEXT"); } catch(e){} }
-    if (!respColNames.includes('descricao'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN descricao TEXT"); } catch(e){} }
-    if (!respColNames.includes('conclusao_tecnica')) { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN conclusao_tecnica TEXT"); } catch(e){} }
-    if (!respColNames.includes('foto_2_path'))       { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN foto_2_path TEXT"); } catch(e){} }
-    if (!respColNames.includes('foto_3_path'))       { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN foto_3_path TEXT"); } catch(e){} }
-    if (!respColNames.includes('subcategoria'))      { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN subcategoria TEXT"); } catch(e){} }
-    if (!respColNames.includes('categoria'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN categoria TEXT"); } catch(e){} }
-    
-    // Migração automática vps_pendencias (Garante que historico_id é NULÁVEL para pendências gerais)
-    try {
-        const pendCols = await db.allAsync("PRAGMA table_info(vps_pendencias)");
-        const histCol = pendCols.find(c => c.name === 'historico_id');
-        if (histCol && histCol.notnull === 1) {
-            console.log('[DB] Migrando vps_pendencias para tornar historico_id nulável...');
-            await db.execAsync('PRAGMA foreign_keys=OFF');
-            await db.execAsync(`
-                CREATE TABLE IF NOT EXISTS vps_pendencias_new (
-                    id            TEXT PRIMARY KEY,
-                    historico_id  TEXT,
-                    canteiro_id   TEXT NOT NULL,
-                    item          TEXT NOT NULL,
-                    adequacao     TEXT,
-                    responsavel   TEXT,
-                    data          DATE,
-                    status        TEXT NOT NULL DEFAULT 'Pendente',
-                    criado_em     DATETIME DEFAULT (datetime('now','localtime')),
-                    FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE,
-                    FOREIGN KEY (historico_id) REFERENCES vps_historico(id) ON DELETE CASCADE ON UPDATE CASCADE
-                );
-                INSERT INTO vps_pendencias_new (id, historico_id, canteiro_id, item, adequacao, responsavel, data, status, criado_em)
-                SELECT id, NULLIF(historico_id, ''), canteiro_id, item, adequacao, responsavel, data, status, criado_em FROM vps_pendencias;
-                DROP TABLE vps_pendencias;
-                ALTER TABLE vps_pendencias_new RENAME TO vps_pendencias;
-                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_historico ON vps_pendencias(historico_id);
-                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_canteiro ON vps_pendencias(canteiro_id);
-                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_status ON vps_pendencias(status);
-            `);
-            await db.execAsync('PRAGMA foreign_keys=ON');
-            console.log('[DB] Migração vps_pendencias concluída!');
-        }
-    } catch(e) {
-        console.error('[DB] Erro na migração vps_pendencias:', e);
-    }
-    
-    console.log('[DB] Schema inicializado e migrado.');
+    console.log('[DB] Schema de tabelas inicializado e pronto.');
 
-    // Atualiza a matrícula 1998 para ser master
-    await db.runAsync("UPDATE usuarios SET is_master = 1 WHERE matricula = '1998'");
-
-    // Seed ADM padrão
     const adm = await db.getAsync("SELECT id FROM usuarios WHERE matricula = ?", ['1998']);
     if (!adm) {
         const hash = bcrypt.hashSync('1234', 10);
@@ -131,9 +323,10 @@ async function initDB() {
             ['1998', 'Weliger', 'Administrador', 'adm', hash, 1]
         );
         console.log('[DB] ADM padrão criado — matrícula: 1998 / senha: 1234');
+    } else {
+        await db.runAsync("UPDATE usuarios SET is_master = 1 WHERE matricula = '1998'");
     }
 
-    // Seed dados de demonstração
     const trein = await db.getAsync("SELECT id FROM treinamentos LIMIT 1");
     if (!trein) {
         const opExists = await db.getAsync("SELECT id FROM usuarios WHERE matricula = ?", ['16317']);
@@ -160,7 +353,6 @@ async function initDB() {
     }
 }
 
-// Inicializa e exporta
 initDB().catch(err => { console.error('[DB] Falha na inicialização:', err); process.exit(1); });
 
 module.exports = db;
