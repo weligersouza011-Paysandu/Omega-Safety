@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maturidade VPS — Omega Safety</title>
+    <link rel="icon" type="image/png" href="/Logo/logo2.png">
     <link rel="stylesheet" href="/css/variables.css">
     <link rel="stylesheet" href="/css/global.css">
     <link rel="stylesheet" href="/css/vps.css">
@@ -53,7 +54,18 @@
                         </div>
                     </div>
 
-                    <!-- 3. Canteiros (Cards) por Status -->
+                    <!-- 3. Filtro por Contrato na Gestão de Canteiros -->
+                    <div style="margin-top: var(--space-lg); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: var(--color-surface); padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--color-border);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 16px;">🏢</span>
+                            <label for="filtro-canteiro-contrato" style="font-size: 13px; font-weight: 700; color: var(--color-text);">Filtrar por Contrato:</label>
+                            <select id="filtro-canteiro-contrato" class="form-select" style="min-width: 220px; font-size: 13px; padding: 6px 12px;">
+                                <option value="">Todos os Contratos</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 4. Canteiros (Cards) por Status -->
                     <div class="canteiros-sections-wrapper" style="margin-top: var(--space-xl);">
                         
                         <div class="status-section">
@@ -77,10 +89,56 @@
                 <div id="tab-evolucao" class="vps-tab-content" style="display: none;">
                     <div class="storytelling-header" style="margin-bottom: var(--space-xl); text-align: center;">
                         <h2 style="color: var(--color-primary); margin-bottom: var(--space-sm);">Jornada de Maturidade</h2>
-                        <p style="color: var(--color-text-muted); max-width: 600px; margin: 0 auto;">Acompanhe o histórico de evolução, inspeções de rotina e mudanças de maturidade das frentes de obra.</p>
+                        <p style="color: var(--color-text-muted); max-width: 600px; margin: 0 auto;">Acompanhe o histórico de evolução, inspeções de rotina e gestão unificada de pendências das frentes de obra.</p>
                     </div>
 
-                    <!-- Timeline -->
+                    <!-- 1. Tabela Geral de Pendências & Adequações no Topo -->
+                    <div class="vps-pendencias-geral-section" style="margin-bottom: var(--space-xl); background: var(--color-surface); padding: var(--space-lg); border-radius: var(--radius-md); border: 1px solid var(--color-border); box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-md); flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <h3 style="font-size: var(--font-size-lg); color: var(--color-text); margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    📋 Gestão Geral de Pendências & Adequações
+                                </h3>
+                                <p style="font-size: var(--font-size-xs); color: var(--color-text-muted); margin: 4px 0 0 0;">
+                                    Controle unificado de itens pendentes, medidas corretivas, responsáveis e prazos
+                                </p>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <select id="filtro-pendencias-status" class="form-select" style="min-width: 170px; font-size: 12px; padding: 6px 10px; width: auto; display: inline-block;">
+                                    <option value="">Todos os Status</option>
+                                    <option value="Pendente" selected>Somente Pendentes 🟠</option>
+                                    <option value="Em Andamento">Em Andamento 🔵</option>
+                                    <option value="Concluído">Resolvido / Concluído 🟢</option>
+                                </select>
+                                <button type="button" class="btn btn--primary" id="btn-add-pendencia-geral" style="font-size: 12px; padding: 7px 16px; font-weight: 700;">
+                                    + Adicionar Pendência
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="overflow-x: auto; border: 1px solid var(--color-border); border-radius: 8px; background: rgba(0, 0, 0, 0.25);">
+                            <table class="vps-pendencias-table" style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                                <thead>
+                                    <tr style="background: rgba(30, 41, 59, 0.7); color: var(--color-text-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border);">
+                                        <th style="padding: 10px; min-width: 180px;">Obra / SS</th>
+                                        <th style="padding: 10px; min-width: 160px;">Itens / Problema</th>
+                                        <th style="padding: 10px; min-width: 160px;">Adequação</th>
+                                        <th style="padding: 10px; min-width: 160px;">Responsável</th>
+                                        <th style="padding: 10px; min-width: 120px;">Data</th>
+                                        <th style="padding: 10px; min-width: 130px;">Status</th>
+                                        <th style="padding: 10px; width: 40px; text-align: center;">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-pendencias-geral">
+                                    <tr>
+                                        <td colspan="7" style="padding: 16px; text-align: center; color: var(--color-text-muted);">Carregando pendências...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 2. Timeline / Histórico Consolidado (Sem tabelas internas) -->
                     <div class="timeline-section" id="timeline-section" style="margin-top: 0; padding-top: 0; border-top: none;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-lg); background: var(--color-surface); padding: var(--space-md); border-radius: var(--radius-md); border: 1px solid var(--color-border);">
                             <div class="form-section__title" style="margin:0;">
@@ -113,7 +171,13 @@
         <form id="form-canteiro" style="margin-top: 20px;">
             <div class="form-group">
                 <label class="form-label">Nome da Obra/SS</label>
-                <input type="text" name="nome" class="form-input" required>
+                <input type="text" name="nome" class="form-input" required placeholder="Ex: SS006/26 - Implantação Britador">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Contrato Associado <span class="required">*</span></label>
+                <select name="contrato" id="canteiro-contrato" class="form-select" required>
+                    <option value="">Selecione um Contrato...</option>
+                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Maturidade Inicial 5S</label>
@@ -159,6 +223,10 @@
                     <option value="Inspeção de Rotina">Inspeção de Rotina</option>
                     <option value="Mudança de Maturidade">Mudança de Maturidade</option>
                 </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Data do Registro</label>
+                <input type="date" name="data_registro" id="evento-data" class="form-input" required>
             </div>
             <div class="form-group" id="group-tipo-card">
                 <label class="form-label">Tipo de Card</label>
@@ -210,6 +278,7 @@
             <h2 id="detalhes-canteiro-titulo">Detalhes da Obra</h2>
             <div class="badge" id="detalhes-canteiro-status" style="margin-top: 10px; display: inline-block;"></div>
             <div id="detalhes-canteiro-maturidade" style="margin-top: 10px; display: inline-block; margin-left: 10px;"></div>
+            <div id="detalhes-canteiro-card-status" style="margin-top: 10px; display: inline-block; margin-left: 10px;"></div>
             <div id="detalhes-canteiro-graphic-container" style="margin-top: 15px;"></div>
         </div>
 
@@ -251,6 +320,12 @@
                 <input type="text" name="nome" id="editar-canteiro-nome" class="form-input" required>
             </div>
             <div class="form-group">
+                <label class="form-label">Contrato Associado</label>
+                <select name="contrato" id="editar-canteiro-contrato" class="form-select">
+                    <option value="">Selecione um Contrato...</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">Status da Obra</label>
                 <select name="status" id="editar-canteiro-status" class="form-select" required>
                     <option value="Em andamento">Em andamento</option>
@@ -280,6 +355,53 @@
             <button type="submit" class="btn btn--primary" style="width:100%; margin-top:20px;">Salvar Alterações</button>
         </form>
     </div>
+</div>
+
+<!-- Modal Nova Pendência / Adequação -->
+<div id="modal-add-pendencia" class="modal profile-modal-overlay" style="display: none;">
+  <div class="modal-content profile-modal" style="width: 550px; max-width: 92%;">
+    <span class="close-modal profile-modal__close" onclick="const m=document.getElementById('modal-add-pendencia'); m.classList.remove('active'); m.style.display='none';">&times;</span>
+    <h3 style="margin-top: 0; margin-bottom: 16px; font-size: var(--font-size-xl); color: var(--color-text);">Adicionar Nova Pendência</h3>
+    <form id="form-add-pendencia" style="margin-top: 15px;">
+      <div class="form-group">
+        <label class="form-label" for="pendencia-canteiro">Obra / Frente de Trabalho: <span class="required">*</span></label>
+        <select id="pendencia-canteiro" class="form-select" required></select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pendencia-item">Item / Problema: <span class="required">*</span></label>
+        <input type="text" id="pendencia-item" class="form-input" required placeholder="Ex: Ausência de Sinalização / EFP" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pendencia-adequacao">Adequação / Ação Corretiva:</label>
+        <input type="text" id="pendencia-adequacao" class="form-input" placeholder="Ex: Instalar placas de aviso e fechar isolamento" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="pendencia-responsavel">Responsável:</label>
+        <select id="pendencia-responsavel" class="form-select"></select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="form-group">
+          <label class="form-label" for="pendencia-data">Data:</label>
+          <input type="date" id="pendencia-data" class="form-input" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pendencia-status">Status:</label>
+          <select id="pendencia-status" class="form-select">
+            <option value="Pendente" selected>Pendente</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Resolvido">Resolvido</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn--primary btn-salvar" style="width:100%; margin-top:20px;">Salvar Pendência</button>
+    </form>
+  </div>
 </div>
 
 <script src="/js/api.js"></script>

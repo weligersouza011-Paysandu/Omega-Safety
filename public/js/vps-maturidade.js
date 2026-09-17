@@ -11,6 +11,31 @@ const MATURIDADE_CONFIG = {
     4: { label: 'Excelência', fullLabel: '4 - Excelência', color: '#3b82f6', textColor: '#ffffff', icon: '🟦', bgLight: 'rgba(59, 130, 246, 0.15)' }
 };
 
+let canteirosGlobais = [];
+let liderancasGlobais = [];
+let contratosGlobais = [];
+let pendenciasEventsInitialized = false;
+const pendenciasEmEdicao = new Set();
+
+function formatarDataExibicao(dataStr) {
+    if (!dataStr) return '-';
+    const parts = String(dataStr).split('-');
+    if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dataStr;
+}
+
+function renderStatusBadgeHTML(status) {
+    if (status === 'Em Andamento') {
+        return `<span style="color: #3b82f6; font-weight: 700; background: rgba(59,130,246,0.12); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(59,130,246,0.3); font-size: 11px; display: inline-block;">🔵 Em Andamento</span>`;
+    }
+    if (status === 'Concluído' || status === 'Concluída' || status === 'Resolvido') {
+        return `<span style="color: #22c55e; font-weight: 700; background: rgba(34,197,94,0.12); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(34,197,94,0.3); font-size: 11px; display: inline-block;">🟢 Resolvido / Concluído</span>`;
+    }
+    return `<span style="color: #f97316; font-weight: 700; background: rgba(249,115,22,0.12); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(249,115,22,0.3); font-size: 11px; display: inline-block;">🟠 Pendente</span>`;
+}
+
 function getMaturidadeConfig(nivel) {
     const n = parseInt(nivel, 10);
     return MATURIDADE_CONFIG[isNaN(n) ? 0 : n] || MATURIDADE_CONFIG[0];
@@ -100,75 +125,135 @@ function setupMaturidadePreviews() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Verificar autenticação e permissão (Apenas ADM)
+    // 1. Verificar autenticação e permissão
     const user = await requireLogin('adm');
-    if (!user) return; // Se não for adm, já foi redirecionado
+    if (!user) return;
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'vps');
     initLogout();
 
     setupMaturidadePreviews();
+    setupAllEventListeners();
 
-    // 2. Carregar dados iniciais
-    await carregarEstatisticas();
-    await carregarCanteiros();
-    await carregarTimeline('');
+    // 2. Carregar dados iniciais em paralelo (Performance rápida)
+    try {
+        await Promise.all([
+            carregarLiderancas(),
+            carregarContratos(),
+            carregarEstatisticas(),
+            carregarCanteiros(),
+            carregarPendenciasGerais(),
+            carregarTimeline('')
+        ]);
+    } catch (e) {
+        console.error('[VPS] Erro ao carregar dados iniciais:', e);
+    }
 
-    // 3. Registrar ouvinte de sincronização global reativa (auto-refresh sem F5)
+    // 3. Ouvinte de sincronização global reativa
     if (typeof window.onGlobalChange === 'function') {
         window.onGlobalChange(async () => {
-            await carregarEstatisticas();
-            await carregarCanteiros();
+            await Promise.all([
+                carregarContratos(),
+                carregarEstatisticas(),
+                carregarCanteiros(),
+                carregarPendenciasGerais()
+            ]);
             const sel = document.getElementById('filtro-timeline');
             await carregarTimeline(sel ? sel.value : '');
         });
     }
+});
 
-    // 3. Event Listeners
-    // Lógica das abas
+function setupAllEventListeners() {
+    // Lógica das Abas
     document.querySelectorAll('.vps-tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', () => {
             document.querySelectorAll('.vps-tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.vps-tab-content').forEach(c => c.style.display = 'none');
             
             btn.classList.add('active');
             const target = btn.getAttribute('data-target');
-            document.getElementById(target).style.display = 'block';
+            const elTarget = document.getElementById(target);
+            if (elTarget) elTarget.style.display = 'block';
         });
     });
 
-    document.getElementById('btn-novo-canteiro').addEventListener('click', () => {
-        document.getElementById('modal-canteiro').classList.add('active');
-        const sel = document.getElementById('canteiro-maturidade-inicial');
-        if (sel) {
-            const el = document.getElementById('preview-maturidade-inicial');
-            if (el) el.innerHTML = renderMaturidade5SGraphic(sel.value);
-        }
-    });
+    // Botão "+ Novo Canteiro"
+    const btnNovoCanteiro = document.getElementById('btn-novo-canteiro');
+    if (btnNovoCanteiro) {
+        btnNovoCanteiro.addEventListener('click', () => {
+            const modal = document.getElementById('modal-canteiro');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.classList.add('active');
+            }
+            const sel = document.getElementById('canteiro-maturidade-inicial');
+            if (sel) {
+                const el = document.getElementById('preview-maturidade-inicial');
+                if (el) el.innerHTML = renderMaturidade5SGraphic(sel.value);
+            }
+        });
+    }
 
-    document.getElementById('btn-novo-evento').addEventListener('click', () => {
-        preencherSelectObrasModal();
-        document.getElementById('modal-evento').classList.add('active');
-        atualizarFormEvento(); // Inicializa lógica do form
-    });
+    // Botão "+ Registrar Evento"
+    const btnNovoEvento = document.getElementById('btn-novo-evento');
+    if (btnNovoEvento) {
+        btnNovoEvento.addEventListener('click', () => {
+            preencherSelectObrasModal();
+            const modal = document.getElementById('modal-evento');
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.classList.add('active');
+            }
+            atualizarFormEvento();
+            const inputData = document.getElementById('evento-data');
+            if (inputData) {
+                inputData.value = new Date().toISOString().split('T')[0];
+            }
+        });
+    }
 
-    // Lógica condicional do formulário de evento
-    document.getElementById('evento-categoria').addEventListener('change', atualizarFormEvento);
-    document.getElementById('evento-canteiro').addEventListener('change', atualizarFormEvento);
+    // Botão "+ Adicionar Pendência" (Abre o modal diretamente)
+    const btnAddPendenciaGeral = document.getElementById('btn-add-pendencia-geral');
+    if (btnAddPendenciaGeral) {
+        btnAddPendenciaGeral.addEventListener('click', async (e) => {
+            e.preventDefault();
+            console.log('[VPS] Clique no botão + Adicionar Pendência');
+            await abrirModalAddPendencia();
+        });
+    }
 
-    document.getElementById('form-canteiro').addEventListener('submit', async (e) => {
+    // Filtros
+    const selFiltroCanteiro = document.getElementById('filtro-canteiro-contrato');
+    if (selFiltroCanteiro) {
+        selFiltroCanteiro.addEventListener('change', async () => {
+            await carregarCanteiros();
+        });
+    }
+
+    const selFiltroPendencias = document.getElementById('filtro-pendencias-status');
+    if (selFiltroPendencias) {
+        selFiltroPendencias.addEventListener('change', async () => {
+            await carregarPendenciasGerais();
+        });
+    }
+
+    // Eventos de formulários
+    document.getElementById('evento-categoria')?.addEventListener('change', atualizarFormEvento);
+    document.getElementById('evento-canteiro')?.addEventListener('change', atualizarFormEvento);
+
+    // Form Novo Canteiro
+    document.getElementById('form-canteiro')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled = true;
-        
         try {
             const formData = new FormData(e.target);
             await api.upload('/vps/canteiros', formData);
             showToast('Canteiro cadastrado com sucesso!');
-            document.getElementById('modal-canteiro').classList.remove('active');
+            fecharModal('modal-canteiro');
             e.target.reset();
-            await carregarEstatisticas();
-            await carregarCanteiros();
+            await Promise.all([carregarContratos(), carregarEstatisticas(), carregarCanteiros()]);
         } catch (error) {
             showToast('Erro ao cadastrar canteiro', 'error');
         } finally {
@@ -176,11 +261,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    document.getElementById('form-editar-canteiro').addEventListener('submit', async (e) => {
+    // Form Editar Canteiro
+    document.getElementById('form-editar-canteiro')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled = true;
-        
         try {
             const formData = new FormData(e.target);
             const id = document.getElementById('editar-canteiro-id').value;
@@ -193,10 +278,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             if (!response.ok) throw new Error();
             showToast('Canteiro atualizado com sucesso!');
-            document.getElementById('modal-editar-canteiro').classList.remove('active');
+            fecharModal('modal-editar-canteiro');
             e.target.reset();
-            await carregarEstatisticas();
-            await carregarCanteiros();
+            await Promise.all([carregarContratos(), carregarEstatisticas(), carregarCanteiros()]);
         } catch (error) {
             showToast('Erro ao atualizar canteiro', 'error');
         } finally {
@@ -204,105 +288,222 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    document.getElementById('form-evento').addEventListener('submit', async (e) => {
+    // Form Registrar Evento
+    document.getElementById('form-evento')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled = true;
-        
         try {
             const formData = new FormData(e.target);
-            formData.append('data_registro', new Date().toISOString().split('T')[0]); // Data atual
+            if (!formData.get('data_registro')) {
+                formData.append('data_registro', new Date().toISOString().split('T')[0]);
+            }
             await api.upload('/vps/historico', formData);
             showToast('Evento registrado com sucesso!');
-            document.getElementById('modal-evento').classList.remove('active');
+            fecharModal('modal-evento');
             e.target.reset();
-            await carregarTimeline(document.getElementById('filtro-timeline').value);
+            await Promise.all([
+                carregarEstatisticas(),
+                carregarCanteiros(),
+                carregarTimeline(document.getElementById('filtro-timeline')?.value || '')
+            ]);
         } catch (error) {
             showToast('Erro ao registrar evento', 'error');
         } finally {
             btn.disabled = false;
         }
     });
-});
 
-let canteirosGlobais = [];
+    // Form Nova Pendência
+    document.getElementById('form-add-pendencia')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btnSubmit = e.target.querySelector('button[type="submit"]');
+        btnSubmit.disabled = true;
+
+        const canteiroId = document.getElementById('pendencia-canteiro').value;
+        const itemVal = document.getElementById('pendencia-item').value.trim();
+        const adeqVal = document.getElementById('pendencia-adequacao').value.trim();
+        const respVal = document.getElementById('pendencia-responsavel').value;
+        const dataVal = document.getElementById('pendencia-data').value;
+        const statusVal = document.getElementById('pendencia-status').value;
+
+        const payload = {
+            canteiro_id: canteiroId,
+            item: itemVal,
+            adequacao: adeqVal,
+            responsavel: respVal,
+            data: dataVal,
+            status: statusVal
+        };
+
+        console.log('[VPS] Criando nova pendência via modal:', payload);
+
+        try {
+            const res = await api.post('/vps/pendencias', payload);
+            console.log('[VPS] Resposta do servidor ao criar pendência:', res);
+            showToast('Pendência adicionada com sucesso!');
+            fecharModal('modal-add-pendencia');
+            e.target.reset();
+            await Promise.all([carregarEstatisticas(), carregarCanteiros(), carregarPendenciasGerais()]);
+        } catch (err) {
+            console.error('[VPS] Erro ao cadastrar pendência:', err);
+            showToast(err.message || 'Erro ao criar nova pendência', 'error');
+        } finally {
+            btnSubmit.disabled = false;
+        }
+    });
+
+    // Fechamento genérico de modais via botões .close-modal e .profile-modal__close
+    document.querySelectorAll('.close-modal, .profile-modal__close').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const modal = btn.closest('.modal, .profile-modal-overlay');
+            if (modal) {
+                modal.classList.remove('active');
+                modal.style.display = 'none';
+            }
+        };
+    });
+}
+
+function fecharModal(modalId) {
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    }
+}
+
+async function abrirModalAddPendencia() {
+    const modalAdd = document.getElementById('modal-add-pendencia');
+    if (!modalAdd) {
+        console.error('[VPS] Elemento #modal-add-pendencia não existe no DOM.');
+        showToast('Erro interno: modal de pendência não encontrado.', 'error');
+        return;
+    }
+
+    let canteiros = canteirosGlobais;
+    if (!canteiros || !canteiros.length) {
+        try {
+            canteiros = await api.get('/vps/canteiros');
+            canteirosGlobais = canteiros;
+        } catch (e) {
+            console.error('[VPS] Erro ao buscar canteiros para o modal:', e);
+        }
+    }
+
+    if (!canteiros || !canteiros.length) {
+        showToast('Cadastre ao menos um canteiro de obra antes de adicionar pendências.', 'warning');
+        return;
+    }
+
+    // Popula select de Obras no modal
+    const selCanteiroModal = document.getElementById('pendencia-canteiro');
+    if (selCanteiroModal) {
+        selCanteiroModal.innerHTML = '<option value="">Selecione a Obra...</option>';
+        canteiros.forEach(c => {
+            selCanteiroModal.innerHTML += `<option value="${c.id}">${escapeAttr(c.nome)}</option>`;
+        });
+        selCanteiroModal.value = canteiros[0].id;
+    }
+
+    // Preenche data atual padrão
+    const inputDataModal = document.getElementById('pendencia-data');
+    if (inputDataModal) {
+        inputDataModal.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Limpa campos
+    const inputItem = document.getElementById('pendencia-item');
+    if (inputItem) inputItem.value = '';
+    const inputAdeq = document.getElementById('pendencia-adequacao');
+    if (inputAdeq) inputAdeq.value = '';
+    const selStatus = document.getElementById('pendencia-status');
+    if (selStatus) selStatus.value = 'Pendente';
+
+    // Atualiza responsáveis filtrados pelo contrato do canteiro selecionado
+    const updateModalLiderancas = () => {
+        const cId = selCanteiroModal ? selCanteiroModal.value : '';
+        const selRespModal = document.getElementById('pendencia-responsavel');
+        if (selRespModal) {
+            selRespModal.innerHTML = renderLiderancaOptions(cId, '');
+        }
+    };
+
+    if (selCanteiroModal) {
+        selCanteiroModal.onchange = updateModalLiderancas;
+        updateModalLiderancas();
+    }
+
+    // Abre modal com suporte a display flex e classe active
+    modalAdd.style.display = 'flex';
+    modalAdd.classList.add('active');
+    console.log('[VPS] Modal #modal-add-pendencia aberto com sucesso!');
+}
+
+async function carregarLiderancas() {
+    try {
+        liderancasGlobais = await api.get('/vps/liderancas');
+    } catch (e) {
+        console.error('Erro ao carregar lideranças:', e);
+    }
+}
+
+async function carregarContratos() {
+    try {
+        contratosGlobais = await api.get('/vps/contratos');
+        
+        const selFiltro = document.getElementById('filtro-canteiro-contrato');
+        if (selFiltro) {
+            const valAtual = selFiltro.value;
+            selFiltro.innerHTML = '<option value="">Todos os Contratos</option>';
+            contratosGlobais.forEach(c => {
+                selFiltro.innerHTML += `<option value="${escapeAttr(c)}">Contrato ${escapeAttr(c)}</option>`;
+            });
+            selFiltro.value = valAtual;
+        }
+
+        const selNovo = document.getElementById('canteiro-contrato');
+        if (selNovo) {
+            const valAtual = selNovo.value;
+            selNovo.innerHTML = '<option value="">Selecione um Contrato...</option>';
+            contratosGlobais.forEach(c => {
+                selNovo.innerHTML += `<option value="${escapeAttr(c)}">Contrato ${escapeAttr(c)}</option>`;
+            });
+            selNovo.value = valAtual;
+        }
+
+        const selEditar = document.getElementById('editar-canteiro-contrato');
+        if (selEditar) {
+            const valAtual = selEditar.value;
+            selEditar.innerHTML = '<option value="">Selecione um Contrato...</option>';
+            contratosGlobais.forEach(c => {
+                selEditar.innerHTML += `<option value="${escapeAttr(c)}">Contrato ${escapeAttr(c)}</option>`;
+            });
+            selEditar.value = valAtual;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar contratos:', e);
+    }
+}
 
 async function carregarEstatisticas() {
     try {
         const stats = await api.get('/vps/stats');
         
-        // 1. CARDS SUPERIORES: ESTRITAMENTE APENAS OBRAS EM ANDAMENTO
         const container = document.getElementById('stats-grid-container');
         if (container) {
             container.innerHTML = '';
-
-            // Obras ativas em andamento é a base estrita do cálculo estatístico superior
             const totalEmAndamento = Number(stats.emAndamento) || 0;
 
             const maturidades = [
-                { 
-                    level: 4, 
-                    count: Number(stats.maturidade4) || 0, 
-                    label: 'Excelência', 
-                    fullLabel: 'Maturidade 4 — Excelência', 
-                    color: '#3b82f6', 
-                    textColor: '#ffffff',
-                    bgLight: 'rgba(59, 130, 246, 0.14)', 
-                    borderColor: 'rgba(59, 130, 246, 0.35)', 
-                    glow: 'rgba(59, 130, 246, 0.35)',
-                    icon: '🏆' 
-                },
-                { 
-                    level: 3, 
-                    count: Number(stats.maturidade3) || 0, 
-                    label: 'Implantado', 
-                    fullLabel: 'Maturidade 3 — Implantado', 
-                    color: '#22c55e', 
-                    textColor: '#ffffff',
-                    bgLight: 'rgba(34, 197, 94, 0.14)', 
-                    borderColor: 'rgba(34, 197, 94, 0.35)', 
-                    glow: 'rgba(34, 197, 94, 0.35)',
-                    icon: '⭐' 
-                },
-                { 
-                    level: 2, 
-                    count: Number(stats.maturidade2) || 0, 
-                    label: 'Em implantação', 
-                    fullLabel: 'Maturidade 2 — Em implantação', 
-                    color: '#eab308', 
-                    textColor: '#000000',
-                    bgLight: 'rgba(234, 179, 8, 0.14)', 
-                    borderColor: 'rgba(234, 179, 8, 0.35)', 
-                    glow: 'rgba(234, 179, 8, 0.35)',
-                    icon: '📈' 
-                },
-                { 
-                    level: 1, 
-                    count: Number(stats.maturidade1) || 0, 
-                    label: 'Fraco', 
-                    fullLabel: 'Maturidade 1 — Fraco', 
-                    color: '#f97316', 
-                    textColor: '#ffffff',
-                    bgLight: 'rgba(249, 115, 22, 0.14)', 
-                    borderColor: 'rgba(249, 115, 22, 0.35)', 
-                    glow: 'rgba(249, 115, 22, 0.35)',
-                    icon: '🌱' 
-                },
-                { 
-                    level: 0, 
-                    count: Number(stats.maturidade0) || 0, 
-                    label: 'Inexistente', 
-                    fullLabel: 'Maturidade 0 — Inexistente', 
-                    color: '#ef4444', 
-                    textColor: '#ffffff',
-                    bgLight: 'rgba(239, 68, 68, 0.14)', 
-                    borderColor: 'rgba(239, 68, 68, 0.35)', 
-                    glow: 'rgba(239, 68, 68, 0.35)',
-                    icon: '❌' 
-                }
+                { level: 4, count: Number(stats.maturidade4) || 0, fullLabel: 'Maturidade 4 — Excelência', color: '#3b82f6', textColor: '#ffffff', bgLight: 'rgba(59, 130, 246, 0.14)', borderColor: 'rgba(59, 130, 246, 0.35)', glow: 'rgba(59, 130, 246, 0.35)', icon: '🏆' },
+                { level: 3, count: Number(stats.maturidade3) || 0, fullLabel: 'Maturidade 3 — Implantado', color: '#22c55e', textColor: '#ffffff', bgLight: 'rgba(34, 197, 94, 0.14)', borderColor: 'rgba(34, 197, 94, 0.35)', glow: 'rgba(34, 197, 94, 0.35)', icon: '⭐' },
+                { level: 2, count: Number(stats.maturidade2) || 0, fullLabel: 'Maturidade 2 — Em implantação', color: '#eab308', textColor: '#000000', bgLight: 'rgba(234, 179, 8, 0.14)', borderColor: 'rgba(234, 179, 8, 0.35)', glow: 'rgba(234, 179, 8, 0.35)', icon: '📈' },
+                { level: 1, count: Number(stats.maturidade1) || 0, fullLabel: 'Maturidade 1 — Fraco', color: '#f97316', textColor: '#ffffff', bgLight: 'rgba(249, 115, 22, 0.14)', borderColor: 'rgba(249, 115, 22, 0.35)', glow: 'rgba(249, 115, 22, 0.35)', icon: '🌱' },
+                { level: 0, count: Number(stats.maturidade0) || 0, fullLabel: 'Maturidade 0 — Inexistente', color: '#ef4444', textColor: '#ffffff', bgLight: 'rgba(239, 68, 68, 0.14)', borderColor: 'rgba(239, 68, 68, 0.35)', glow: 'rgba(239, 68, 68, 0.35)', icon: '❌' }
             ];
 
-            // Renderizar apenas faixas de maturidade ativas em obras em andamento
             maturidades.forEach(m => {
                 if (m.count > 0) {
                     const pct = totalEmAndamento > 0 ? Math.round((m.count / totalEmAndamento) * 100) : 0;
@@ -334,60 +535,14 @@ async function carregarEstatisticas() {
             });
         }
 
-        // 2. SEÇÃO DE CARDS HISTÓRICOS INFERIORES (COMPACTOS)
         const containerCompact = document.getElementById('historico-cards-compact-container');
         if (containerCompact) {
             containerCompact.innerHTML = '';
-
             const cardsCompactos = [
-                {
-                    tipo: 'Diamante',
-                    label: 'Card Diamante',
-                    count: Number(stats.cardsDiamante) || 0,
-                    color: '#3b82f6',
-                    textColor: '#ffffff',
-                    glow: 'rgba(59, 130, 246, 0.35)',
-                    bgLight: 'rgba(59, 130, 246, 0.12)',
-                    borderColor: 'rgba(59, 130, 246, 0.35)',
-                    icon: '💎',
-                    subtext: 'Destaques e Evoluções'
-                },
-                {
-                    tipo: 'Verde',
-                    label: 'Card Verde',
-                    count: Number(stats.cardsVerde) || 0,
-                    color: '#22c55e',
-                    textColor: '#ffffff',
-                    glow: 'rgba(34, 197, 94, 0.35)',
-                    bgLight: 'rgba(34, 197, 94, 0.12)',
-                    borderColor: 'rgba(34, 197, 94, 0.35)',
-                    icon: '🟢',
-                    subtext: 'Conforme / 5S OK'
-                },
-                {
-                    tipo: 'Amarelo',
-                    label: 'Card Amarelo',
-                    count: Number(stats.cardsAmarelo) || 0,
-                    color: '#eab308',
-                    textColor: '#000000',
-                    glow: 'rgba(234, 179, 8, 0.35)',
-                    bgLight: 'rgba(234, 179, 8, 0.12)',
-                    borderColor: 'rgba(234, 179, 8, 0.35)',
-                    icon: '🟡',
-                    subtext: 'Alertas de Não Conformidade'
-                },
-                {
-                    tipo: 'Vermelho',
-                    label: 'Card Vermelho',
-                    count: Number(stats.cardsVermelho) || 0,
-                    color: '#ef4444',
-                    textColor: '#ffffff',
-                    glow: 'rgba(239, 68, 68, 0.35)',
-                    bgLight: 'rgba(239, 68, 68, 0.12)',
-                    borderColor: 'rgba(239, 68, 68, 0.35)',
-                    icon: '🔴',
-                    subtext: 'Interdições / Gravíssimos'
-                }
+                { tipo: 'Diamante', label: 'Card Diamante', count: Number(stats.cardsDiamante) || 0, color: '#3b82f6', textColor: '#ffffff', glow: 'rgba(59, 130, 246, 0.35)', bgLight: 'rgba(59, 130, 246, 0.12)', borderColor: 'rgba(59, 130, 246, 0.35)', icon: '💎', subtext: 'Destaques e Evoluções' },
+                { tipo: 'Verde', label: 'Card Verde', count: Number(stats.cardsVerde) || 0, color: '#22c55e', textColor: '#ffffff', glow: 'rgba(34, 197, 94, 0.35)', bgLight: 'rgba(34, 197, 94, 0.12)', borderColor: 'rgba(34, 197, 94, 0.35)', icon: '🟢', subtext: 'Conforme / 5S OK' },
+                { tipo: 'Amarelo', label: 'Card Amarelo', count: Number(stats.cardsAmarelo) || 0, color: '#eab308', textColor: '#000000', glow: 'rgba(234, 179, 8, 0.35)', bgLight: 'rgba(234, 179, 8, 0.12)', borderColor: 'rgba(234, 179, 8, 0.35)', icon: '🟡', subtext: 'Alertas de Não Conformidade' },
+                { tipo: 'Vermelho', label: 'Card Vermelho', count: Number(stats.cardsVermelho) || 0, color: '#ef4444', textColor: '#ffffff', glow: 'rgba(239, 68, 68, 0.35)', bgLight: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', icon: '🔴', subtext: 'Interdições / Gravíssimos' }
             ];
 
             cardsCompactos.forEach(c => {
@@ -423,103 +578,397 @@ async function carregarEstatisticas() {
 }
 
 function atualizarFormEvento() {
-    const categoria = document.getElementById('evento-categoria').value;
+    const categoria = document.getElementById('evento-categoria')?.value;
     const groupCard = document.getElementById('group-tipo-card');
     const groupNivel = document.getElementById('group-nova-maturidade');
     const inputCard = document.getElementById('evento-tipo-card');
     const inputNivel = document.getElementById('evento-novo-nivel');
 
+    if (!categoria) return;
+
     if (categoria === 'Mudança de Maturidade') {
-        groupCard.style.display = 'none';
-        inputCard.removeAttribute('required');
-        groupNivel.style.display = 'block';
-        inputNivel.setAttribute('required', 'required');
+        if (groupCard) groupCard.style.display = 'none';
+        inputCard?.removeAttribute('required');
+        if (groupNivel) groupNivel.style.display = 'block';
+        inputNivel?.setAttribute('required', 'required');
         const el = document.getElementById('preview-maturidade-novo-nivel');
         if (el && inputNivel) el.innerHTML = renderMaturidade5SGraphic(inputNivel.value);
     } else {
-        groupCard.style.display = 'block';
-        inputCard.setAttribute('required', 'required');
-        groupNivel.style.display = 'none';
-        inputNivel.removeAttribute('required');
+        if (groupCard) groupCard.style.display = 'block';
+        inputCard?.setAttribute('required', 'required');
+        if (groupNivel) groupNivel.style.display = 'none';
+        inputNivel?.removeAttribute('required');
     }
 
-    // Opção Diamante sempre disponível para seleção manual na rotina de inspeção
     const diamanteOption = document.getElementById('option-diamante');
-    if (diamanteOption) {
-        diamanteOption.style.display = 'block';
+    if (diamanteOption) diamanteOption.style.display = 'block';
+}
+
+function renderCardStatusBadge(cardStatus) {
+    if (!cardStatus || (!cardStatus.ultimoCard && !cardStatus.hasDiamante)) {
+        return `
+            <div class="canteiro-card__last-card-legend" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.75); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.12); color: var(--color-text-muted, #94a3b8); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                Sem histórico
+            </div>
+        `;
     }
+
+    if (cardStatus.hasDiamante) {
+        const verdes = cardStatus.totalVerdes || 0;
+        const verdesBadge = verdes > 0 
+            ? `<span style="background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
+                🟢 ${verdes} Verde${verdes > 1 ? 's' : ''}
+               </span>`
+            : '';
+
+        return `
+            <div class="canteiro-card__last-card-legend" title="Card Diamante mantido permanentemente (${verdes} Verde(s) acumulados)" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.92); backdrop-filter: blur(4px); border: 1px solid #3b82f6; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.35); max-width: calc(100% - 55px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                <span style="font-size: 13px;">💎</span>
+                <span>Card Diamante</span>
+                ${verdesBadge}
+            </div>
+        `;
+    }
+
+    let cardColor = '#22c55e', cardIcon = '🟢', cardLabel = 'Verde';
+    let subtext = '';
+
+    if (cardStatus.ultimoCard === 'Amarelo') {
+        cardColor = '#eab308'; cardIcon = '🟡'; cardLabel = 'Amarelo';
+        subtext = ' (Atenção)';
+    } else if (cardStatus.ultimoCard === 'Vermelho') {
+        cardColor = '#ef4444'; cardIcon = '🔴'; cardLabel = 'Vermelho';
+        subtext = ' (Interdição)';
+    } else if (cardStatus.ultimoCard === 'Verde') {
+        cardColor = '#22c55e'; cardIcon = '🟢'; cardLabel = 'Verde';
+        if (cardStatus.totalVerdes > 1) {
+            subtext = ` (${cardStatus.totalVerdes}x)`;
+        }
+    }
+
+    return `
+        <div class="canteiro-card__last-card-legend" title="Status de Inspeção: Card ${cardLabel}" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.88); backdrop-filter: blur(4px); border: 1px solid ${cardColor}; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 12px;">${cardIcon}</span>
+            <span>Card ${cardLabel}${subtext}</span>
+        </div>
+    `;
+}
+
+function escapeAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderLiderancaOptions(canteiroId, responsavelAtual) {
+    const cant = canteirosGlobais.find(c => c.id === canteiroId);
+    const targetContrato = cant ? cant.contrato : null;
+
+    let filtered = liderancasGlobais;
+    if (targetContrato && String(targetContrato).trim() !== '') {
+        const cleanTarget = String(targetContrato).trim();
+        filtered = liderancasGlobais.filter(l => {
+            if (!l.contrato) return false;
+            const arr = String(l.contrato).split(',').map(x => x.trim());
+            return arr.includes(cleanTarget) || l.contrato === cleanTarget;
+        });
+    }
+
+    let optionsLiderancas = '<option value="">Selecione Liderança...</option>';
+    filtered.forEach(l => {
+        const sel = (responsavelAtual === l.nome) ? 'selected' : '';
+        const contratoInfo = l.contrato ? ` (${l.contrato})` : '';
+        optionsLiderancas += `<option value="${escapeAttr(l.nome)}" ${sel}>${escapeAttr(l.nome)}${contratoInfo}</option>`;
+    });
+    if (responsavelAtual && !filtered.some(l => l.nome === responsavelAtual)) {
+        optionsLiderancas += `<option value="${escapeAttr(responsavelAtual)}" selected>${escapeAttr(responsavelAtual)}</option>`;
+    }
+    return optionsLiderancas;
+}
+
+async function carregarPendenciasGerais() {
+    const tbody = document.getElementById('tbody-pendencias-geral');
+    if (!tbody) return;
+
+    const statusFilterSel = document.getElementById('filtro-pendencias-status');
+    const statusFilter = statusFilterSel ? statusFilterSel.value : 'Pendente';
+
+    try {
+        let url = '/vps/pendencias';
+        if (statusFilter) {
+            url += `?status=${encodeURIComponent(statusFilter)}`;
+        }
+
+        const pendencias = await api.get(url);
+
+        if (!pendencias.length) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="padding: 16px; text-align: center; color: var(--color-text-muted); font-size: 11px; font-style: italic;">
+                        Nenhuma pendência encontrada${statusFilter ? ` com status "${statusFilter}"` : ''}.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        pendencias.forEach(p => {
+            const isEditing = pendenciasEmEdicao.has(String(p.id));
+
+            if (isEditing) {
+                let statusStyle = 'color: #f97316;';
+                if (p.status === 'Em Andamento') statusStyle = 'color: #3b82f6;';
+                else if (p.status === 'Concluído' || p.status === 'Concluída' || p.status === 'Resolvido') statusStyle = 'color: #22c55e;';
+
+                let optionsObras = '<option value="">Selecione Obra...</option>';
+                canteirosGlobais.forEach(c => {
+                    const sel = (p.canteiro_id === c.id) ? 'selected' : '';
+                    optionsObras += `<option value="${c.id}" ${sel}>${escapeAttr(c.nome)}</option>`;
+                });
+
+                const optionsLiderancas = renderLiderancaOptions(p.canteiro_id, p.responsavel);
+
+                html += `
+                    <tr data-pendencia-id="${p.id}" class="row-editing" style="background: rgba(59, 130, 246, 0.08);">
+                        <td style="padding: 6px 8px;">
+                            <select class="vps-table-select pendencia-geral-canteiro" data-id="${p.id}" style="font-weight: 600;">
+                                ${optionsObras}
+                            </select>
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            <input type="text" class="vps-table-input pendencia-geral-item" data-id="${p.id}" value="${escapeAttr(p.item || '')}" placeholder="Item / problema...">
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            <input type="text" class="vps-table-input pendencia-geral-adequacao" data-id="${p.id}" value="${escapeAttr(p.adequacao || '')}" placeholder="Ação de adequação...">
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            <select class="vps-table-select pendencia-geral-responsavel" data-id="${p.id}">
+                                ${optionsLiderancas}
+                            </select>
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            <input type="date" class="vps-table-input pendencia-geral-data" data-id="${p.id}" value="${p.data || ''}">
+                        </td>
+                        <td style="padding: 6px 8px;">
+                            <select class="vps-table-select pendencia-geral-status" data-id="${p.id}" style="${statusStyle} font-weight: 700;">
+                                <option value="Pendente" ${p.status === 'Pendente' ? 'selected' : ''}>🟠 Pendente</option>
+                                <option value="Em Andamento" ${p.status === 'Em Andamento' ? 'selected' : ''}>🔵 Em Andamento</option>
+                                <option value="Concluído" ${(p.status === 'Concluído' || p.status === 'Concluída' || p.status === 'Resolvido') ? 'selected' : ''}>🟢 Resolvido / Concluído</option>
+                            </select>
+                        </td>
+                        <td style="padding: 6px; text-align: center; white-space: nowrap;">
+                            <button type="button" class="btn-save-pendencia-geral" data-id="${p.id}" title="Salvar Alterações" style="background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px; margin-right: 4px;">💾</button>
+                            <button type="button" class="btn-cancel-edit-pendencia-geral" data-id="${p.id}" title="Cancelar Edição" style="background: none; border: none; cursor: pointer; font-size: 14px; padding: 4px;">❌</button>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                const canteiroObj = canteirosGlobais.find(c => c.id === p.canteiro_id);
+                const nomeObra = p.canteiro_nome || (canteiroObj ? canteiroObj.nome : 'Obra Desconhecida');
+
+                html += `
+                    <tr data-pendencia-id="${p.id}">
+                        <td style="padding: 10px 12px; font-weight: 600; color: var(--color-text);">
+                            ${escapeAttr(nomeObra)}
+                        </td>
+                        <td style="padding: 10px 12px; color: var(--color-text);">
+                            ${escapeAttr(p.item || '-')}
+                        </td>
+                        <td style="padding: 10px 12px; color: var(--color-text-muted);">
+                            ${escapeAttr(p.adequacao || '-')}
+                        </td>
+                        <td style="padding: 10px 12px; color: var(--color-text-muted);">
+                            ${escapeAttr(p.responsavel || '-')}
+                        </td>
+                        <td style="padding: 10px 12px; color: var(--color-text-muted); font-size: 11px;">
+                            ${formatarDataExibicao(p.data)}
+                        </td>
+                        <td style="padding: 10px 12px;">
+                            ${renderStatusBadgeHTML(p.status)}
+                        </td>
+                        <td style="padding: 10px 6px; text-align: center; white-space: nowrap;">
+                            <button type="button" class="btn-edit-pendencia-geral" data-id="${p.id}" title="Editar Pendência" style="background: none; border: none; cursor: pointer; font-size: 15px; padding: 4px; margin-right: 4px;">✏️</button>
+                            <button type="button" class="btn-delete-pendencia-geral" data-id="${p.id}" title="Excluir Pendência" style="background: none; border: none; cursor: pointer; font-size: 15px; padding: 4px;">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+
+        tbody.innerHTML = html;
+        setupPendenciasGeraisEvents();
+
+    } catch (e) {
+        console.error('Erro ao carregar pendências gerais:', e);
+        tbody.innerHTML = `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #ef4444;">Erro ao carregar tabela de pendências.</td></tr>`;
+    }
+}
+
+function setupPendenciasGeraisEvents() {
+    const tbody = document.getElementById('tbody-pendencias-geral');
+    if (!tbody || pendenciasEventsInitialized) return;
+    pendenciasEventsInitialized = true;
+
+    // Delegation para alteração dinâmica de canteiro no modo de edição
+    tbody.addEventListener('change', (e) => {
+        const target = e.target;
+        const row = target.closest('tr');
+        if (!row) return;
+
+        if (target.classList.contains('pendencia-geral-canteiro')) {
+            const newCanteiroId = target.value;
+            const respSelect = row.querySelector('.pendencia-geral-responsavel');
+            if (respSelect) {
+                const currentResp = respSelect.value;
+                respSelect.innerHTML = renderLiderancaOptions(newCanteiroId, currentResp);
+            }
+        }
+    });
+
+    // Delegation para botões de ação (✏️ Editar, 💾 Salvar, ❌ Cancelar, 🗑️ Excluir)
+    tbody.addEventListener('click', async (e) => {
+        const target = e.target;
+
+        // Clique no botão ✏️ (Editar linha)
+        const btnEdit = target.closest('.btn-edit-pendencia-geral');
+        if (btnEdit) {
+            e.stopPropagation();
+            const id = btnEdit.getAttribute('data-id');
+            pendenciasEmEdicao.add(String(id));
+            await carregarPendenciasGerais();
+            return;
+        }
+
+        // Clique no botão ❌ (Cancelar edição)
+        const btnCancel = target.closest('.btn-cancel-edit-pendencia-geral');
+        if (btnCancel) {
+            e.stopPropagation();
+            const id = btnCancel.getAttribute('data-id');
+            pendenciasEmEdicao.delete(String(id));
+            await carregarPendenciasGerais();
+            return;
+        }
+
+        // Clique no botão 💾 (Salvar alterações)
+        const btnSave = target.closest('.btn-save-pendencia-geral');
+        if (btnSave) {
+            e.stopPropagation();
+            const id = btnSave.getAttribute('data-id');
+            const row = btnSave.closest('tr');
+            if (row) {
+                btnSave.disabled = true;
+                try {
+                    await salvarLinhaPendencia(row, id);
+                    pendenciasEmEdicao.delete(String(id));
+                    showToast('Pendência atualizada com sucesso!');
+                    await Promise.all([carregarEstatisticas(), carregarCanteiros(), carregarPendenciasGerais()]);
+                } catch (err) {
+                    showToast('Erro ao salvar pendência', 'error');
+                } finally {
+                    btnSave.disabled = false;
+                }
+            }
+            return;
+        }
+
+        // Clique no botão 🗑️ (Excluir)
+        const btnDelete = target.closest('.btn-delete-pendencia-geral');
+        if (btnDelete) {
+            e.stopPropagation();
+            const id = btnDelete.getAttribute('data-id');
+            if (confirm('Deseja realmente excluir esta pendência?')) {
+                try {
+                    await api.delete('/vps/pendencias/' + id);
+                    pendenciasEmEdicao.delete(String(id));
+                    showToast('Pendência removida com sucesso!');
+                    await Promise.all([carregarEstatisticas(), carregarCanteiros(), carregarPendenciasGerais()]);
+                } catch (err) {
+                    showToast('Erro ao excluir pendência', 'error');
+                }
+            }
+        }
+    });
+}
+
+async function salvarLinhaPendencia(row, id) {
+    const canteiroVal = row.querySelector('.pendencia-geral-canteiro').value;
+    const itemVal = row.querySelector('.pendencia-geral-item').value.trim();
+    const adeqVal = row.querySelector('.pendencia-geral-adequacao').value.trim();
+    const respVal = row.querySelector('.pendencia-geral-responsavel').value;
+    const dataVal = row.querySelector('.pendencia-geral-data').value;
+    const statusVal = row.querySelector('.pendencia-geral-status').value;
+
+    await api.put('/vps/pendencias/' + id, {
+        canteiro_id: canteiroVal,
+        item: itemVal,
+        adequacao: adeqVal,
+        responsavel: respVal,
+        data: dataVal,
+        status: statusVal
+    });
 }
 
 async function carregarCanteiros() {
     try {
-        canteirosGlobais = await api.get('/vps/canteiros');
+        const filtroContrato = document.getElementById('filtro-canteiro-contrato')?.value || '';
+        let url = '/vps/canteiros';
+        if (filtroContrato) {
+            url += `?contrato=${encodeURIComponent(filtroContrato)}`;
+        }
+
+        canteirosGlobais = await api.get(url);
         const select = document.getElementById('filtro-timeline');
         
-        // Limpar e repopular o select da timeline
-        select.innerHTML = '<option value="">Todas as obras (Consolidado)</option>';
-        
+        if (select) {
+            select.innerHTML = '<option value="">Todas as obras (Consolidado)</option>';
+        }
+
         const containerAndamento = document.getElementById('canteiros-andamento');
         const containerParalisadas = document.getElementById('canteiros-paralisadas');
         const containerConcluidas = document.getElementById('canteiros-concluidas');
         
-        containerAndamento.innerHTML = '';
-        containerParalisadas.innerHTML = '';
-        containerConcluidas.innerHTML = '';
+        if (containerAndamento) containerAndamento.innerHTML = '';
+        if (containerParalisadas) containerParalisadas.innerHTML = '';
+        if (containerConcluidas) containerConcluidas.innerHTML = '';
 
         if (!canteirosGlobais.length) {
-            containerAndamento.innerHTML = '<div class="empty-state">Nenhum canteiro em andamento.</div>';
-            containerParalisadas.innerHTML = '<div class="empty-state">Nenhuma obra paralisada.</div>';
-            containerConcluidas.innerHTML = '<div class="empty-state">Nenhuma obra concluída.</div>';
+            if (containerAndamento) containerAndamento.innerHTML = '<div class="empty-state">Nenhum canteiro em andamento.</div>';
+            if (containerParalisadas) containerParalisadas.innerHTML = '<div class="empty-state">Nenhuma obra paralisada.</div>';
+            if (containerConcluidas) containerConcluidas.innerHTML = '<div class="empty-state">Nenhuma obra concluída.</div>';
             return;
         }
 
         let countAndamento = 0, countParalisadas = 0, countConcluidas = 0;
 
         canteirosGlobais.forEach(c => {
-            select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+            if (select) select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
 
             const bg1 = c.capa_1_path ? `url(${c.capa_1_path})` : 'var(--color-border)';
             const bg2 = c.capa_2_path ? `url(${c.capa_2_path})` : 'var(--color-border)';
             
-            // Legenda do último card recebido no topo do canteiro
-            let ultimoCardHTML = '';
-            if (c.ultimo_card) {
-                let cardColor = '#22c55e', cardIcon = '🟢', cardLabel = 'Verde';
-                if (c.ultimo_card === 'Amarelo') { cardColor = '#eab308'; cardIcon = '🟡'; cardLabel = 'Amarelo'; }
-                else if (c.ultimo_card === 'Vermelho') { cardColor = '#ef4444'; cardIcon = '🔴'; cardLabel = 'Vermelho'; }
-                else if (c.ultimo_card === 'Diamante') { cardColor = '#3b82f6'; cardIcon = '💎'; cardLabel = 'Diamante'; }
-                
-                ultimoCardHTML = `
-                    <div class="canteiro-card__last-card-legend" title="Último status de inspeção" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.88); backdrop-filter: blur(4px); border: 1px solid ${cardColor}; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.5);">
-                        <span style="font-size: 12px;">${cardIcon}</span>
-                        <span>Último: Card ${cardLabel}</span>
-                    </div>
-                `;
-            } else {
-                ultimoCardHTML = `
-                    <div class="canteiro-card__last-card-legend" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.7); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.12); color: var(--color-text-muted, #94a3b8); padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                        Sem histórico
-                    </div>
-                `;
-            }
+            const statusCardHTML = renderCardStatusBadge(c.card_status);
 
             const card = document.createElement('div');
             card.className = 'canteiro-card';
-            card.onclick = () => {
-                abrirDetalhesCanteiro(c);
-            };
+            card.onclick = () => abrirDetalhesCanteiro(c);
             
+            const statusObraHTML = c.tem_pendencias_ativas
+                ? `<span class="badge badge--acao-pendente" style="background: rgba(239, 68, 68, 0.18); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);">⚠️ Ação Pendente</span>`
+                : '';
+
             card.innerHTML = `
-                ${ultimoCardHTML}
+                ${statusCardHTML}
                 <div class="canteiro-card__edit-btn" title="Editar Obra">⋮</div>
                 <div class="canteiro-card__covers">
                     <div class="canteiro-card__cover" style="background-image: ${bg1}"></div>
                     <div class="canteiro-card__cover" style="background-image: ${bg2}"></div>
                 </div>
                 <div class="canteiro-card__content">
-                    <div class="canteiro-card__title">${c.nome}</div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
-                        <div class="canteiro-card__status">${c.status}</div>
+                    <div class="canteiro-card__title" style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
+                        <span>${c.nome}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: auto;">
+                        ${c.tem_pendencias_ativas ? `<div class="canteiro-card__status">${statusObraHTML}</div>` : ''}
                         <div class="canteiro-card__maturidade">${getMaturidadeBadgeHTML(c.maturidade)}</div>
                     </div>
                 </div>
@@ -531,20 +980,20 @@ async function carregarCanteiros() {
             };
 
             if (c.status === 'Em andamento') {
-                containerAndamento.appendChild(card);
+                containerAndamento?.appendChild(card);
                 countAndamento++;
             } else if (c.status === 'Paralisada') {
-                containerParalisadas.appendChild(card);
+                containerParalisadas?.appendChild(card);
                 countParalisadas++;
             } else {
-                containerConcluidas.appendChild(card);
+                containerConcluidas?.appendChild(card);
                 countConcluidas++;
             }
         });
 
-        if(countAndamento === 0) containerAndamento.innerHTML = '<div class="empty-state">Nenhum canteiro em andamento.</div>';
-        if(countParalisadas === 0) containerParalisadas.innerHTML = '<div class="empty-state">Nenhuma obra paralisada.</div>';
-        if(countConcluidas === 0) containerConcluidas.innerHTML = '<div class="empty-state">Nenhuma obra concluída.</div>';
+        if (containerAndamento && countAndamento === 0) containerAndamento.innerHTML = '<div class="empty-state">Nenhum canteiro em andamento.</div>';
+        if (containerParalisadas && countParalisadas === 0) containerParalisadas.innerHTML = '<div class="empty-state">Nenhuma obra paralisada.</div>';
+        if (containerConcluidas && countConcluidas === 0) containerConcluidas.innerHTML = '<div class="empty-state">Nenhuma obra concluída.</div>';
 
     } catch (e) {
         console.error(e);
@@ -555,17 +1004,26 @@ function abrirModalEditar(canteiro) {
     document.getElementById('editar-canteiro-id').value = canteiro.id;
     document.getElementById('editar-canteiro-nome').value = canteiro.nome;
     document.getElementById('editar-canteiro-status').value = canteiro.status;
+    const selContrato = document.getElementById('editar-canteiro-contrato');
+    if (selContrato) {
+        selContrato.value = canteiro.contrato || '';
+    }
     const selMat = document.getElementById('editar-canteiro-maturidade');
     if (selMat) {
         selMat.value = canteiro.maturidade !== undefined ? canteiro.maturidade : 1;
         const el = document.getElementById('preview-maturidade-editar');
         if (el) el.innerHTML = renderMaturidade5SGraphic(selMat.value);
     }
-    document.getElementById('modal-editar-canteiro').classList.add('active');
+    const modal = document.getElementById('modal-editar-canteiro');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
 }
 
 function preencherSelectObrasModal() {
     const select = document.getElementById('evento-canteiro');
+    if (!select) return;
     select.innerHTML = '<option value="">Selecione a obra...</option>';
     canteirosGlobais.forEach(c => {
         select.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
@@ -580,12 +1038,30 @@ async function abrirDetalhesCanteiro(canteiro) {
     document.getElementById('detalhes-canteiro-titulo').textContent = canteiro.nome;
     document.getElementById('detalhes-canteiro-status').textContent = canteiro.status;
     document.getElementById('detalhes-canteiro-maturidade').innerHTML = getMaturidadeBadgeHTML(canteiro.maturidade);
+
+    const cardStatusBox = document.getElementById('detalhes-canteiro-card-status');
+    if (cardStatusBox) {
+        cardStatusBox.innerHTML = renderCardStatusBadge(canteiro.card_status);
+        const badgeEl = cardStatusBox.querySelector('.canteiro-card__last-card-legend');
+        if (badgeEl) {
+            badgeEl.style.position = 'relative';
+            badgeEl.style.top = '0';
+            badgeEl.style.left = '0';
+            badgeEl.style.display = 'inline-flex';
+            badgeEl.style.maxWidth = 'none';
+        }
+    }
+
     const graphicBox = document.getElementById('detalhes-canteiro-graphic-container');
     if (graphicBox) {
         graphicBox.innerHTML = renderMaturidade5SGraphic(canteiro.maturidade);
     }
     
-    document.getElementById('modal-canteiro-detalhes').classList.add('active');
+    const modal = document.getElementById('modal-canteiro-detalhes');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
     await carregarTimelineParaContainer(canteiro.id, 'detalhes-timeline-container');
 }
 
@@ -599,24 +1075,6 @@ function abrirModalDetalhesEvento(h) {
     else if (h.tipo_card === 'Vermelho') badgeCard = '<span class="badge" style="background:#ef4444; color:#fff; font-size:12px; font-weight:700; padding:5px 12px; border-radius:12px;">🔴 Card Vermelho (Interdição)</span>';
     else if (h.tipo_card === 'Diamante') badgeCard = '<span class="badge" style="background:#3b82f6; color:#fff; font-size:12px; font-weight:700; padding:5px 12px; border-radius:12px; box-shadow:0 0 10px rgba(59,130,246,0.5);">💎 Card Diamante (Evolução)</span>';
     else badgeCard = '<span class="badge" style="background:#a855f7; color:#fff; font-size:12px; font-weight:700; padding:5px 12px; border-radius:12px;">📊 Mudança de Maturidade</span>';
-
-    let imgsHTML = '';
-    if (h.evidencia_1_path) {
-        imgsHTML += `
-            <div style="text-align:center;">
-                <img src="${h.evidencia_1_path}" style="max-width:100%; max-height:220px; border-radius:8px; border:1px solid var(--color-border); cursor:pointer; object-fit:cover;" onclick="window.open('${h.evidencia_1_path}','_blank')">
-                <div style="font-size:11px; color:var(--color-text-muted); margin-top:4px;">Evidência 1</div>
-            </div>
-        `;
-    }
-    if (h.evidencia_2_path) {
-        imgsHTML += `
-            <div style="text-align:center;">
-                <img src="${h.evidencia_2_path}" style="max-width:100%; max-height:220px; border-radius:8px; border:1px solid var(--color-border); cursor:pointer; object-fit:cover;" onclick="window.open('${h.evidencia_2_path}','_blank')">
-                <div style="font-size:11px; color:var(--color-text-muted); margin-top:4px;">Evidência 2</div>
-            </div>
-        `;
-    }
 
     let anexoHTML = '';
     if (h.anexo_path) {
@@ -661,23 +1119,19 @@ function abrirModalDetalhesEvento(h) {
             <div style="background:rgba(255,255,255,0.03); border:1px solid var(--color-border); padding:14px; border-radius:8px; font-size:0.92rem; color:var(--color-text); line-height:1.5; white-space:pre-wrap;">${h.descricao || 'Sem descrição cadastrada.'}</div>
         </div>
 
-        ${imgsHTML ? `
-        <div style="margin-bottom:16px;">
-            <h4 style="margin-bottom:10px; font-size:0.95rem; color:var(--color-text);">Evidências Fotográficas:</h4>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
-                ${imgsHTML}
-            </div>
-        </div>
-        ` : ''}
-
         ${anexoHTML}
     `;
 
-    document.getElementById('modal-detalhes-evento').classList.add('active');
+    const modal = document.getElementById('modal-detalhes-evento');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
 }
 
 async function carregarTimelineParaContainer(canteiroId, containerId) {
     const container = document.getElementById(containerId);
+    if (!container) return;
     container.innerHTML = '<div class="empty-state">Carregando histórico...</div>';
     
     try {
@@ -698,13 +1152,9 @@ async function carregarTimelineParaContainer(canteiroId, containerId) {
             const tipoCardClass = (h.tipo_card === 'N/A') ? 'Mudanca' : h.tipo_card;
             item.className = `timeline-item timeline-item--${tipoCardClass}`;
             
-            let imgsHTML = '';
-            if (h.evidencia_1_path) imgsHTML += `<img src="${h.evidencia_1_path}" class="timeline-item__img" onclick="event.stopPropagation(); window.open('${h.evidencia_1_path}','_blank')">`;
-            if (h.evidencia_2_path) imgsHTML += `<img src="${h.evidencia_2_path}" class="timeline-item__img" onclick="event.stopPropagation(); window.open('${h.evidencia_2_path}','_blank')">`;
-            
             let anexoHTML = '';
             if (h.anexo_path) {
-                anexoHTML = `<a href="${h.anexo_path}" target="_blank" onclick="event.stopPropagation();" class="timeline-item__anexo">📄 Visualizar Documento</a>`;
+                anexoHTML = `<a href="${h.anexo_path}" target="_blank" onclick="event.stopPropagation();" class="timeline-item__anexo" style="margin-top:8px; display:inline-block;">📄 Visualizar Documento Anexo</a>`;
             }
             
             const idInspecaoText = h.id_inspecao ? ` | ID: ${h.id_inspecao}` : '';
@@ -718,13 +1168,11 @@ async function carregarTimelineParaContainer(canteiroId, containerId) {
                         <span>${formatDate(h.data_registro)}</span>
                     </div>
                     <div class="timeline-item__title">${h.categoria} ${h.tipo_card !== 'N/A' ? '- Card ' + h.tipo_card : ''}</div>
-                    <div style="color: var(--color-text); font-size: var(--font-size-md); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">${h.descricao || ''}</div>
-                    ${imgsHTML ? `<div class="timeline-item__evidencias">${imgsHTML}</div>` : ''}
+                    <div style="color: var(--color-text); font-size: var(--font-size-md); margin-top: 6px; line-height: 1.5;">${h.descricao || ''}</div>
                     ${anexoHTML}
                 </div>
             `;
 
-            // Botão de Exclusão
             const btnDelete = item.querySelector('.timeline-item__delete-btn');
             if (btnDelete) {
                 btnDelete.onclick = async (e) => {
@@ -733,9 +1181,7 @@ async function carregarTimelineParaContainer(canteiroId, containerId) {
                         try {
                             await api.delete('/vps/historico/' + h.id);
                             showToast('Evento excluído do histórico com sucesso!');
-                            await carregarEstatisticas();
-                            await carregarCanteiros();
-                            await carregarTimelineParaContainer(canteiroId, containerId);
+                            await Promise.all([carregarEstatisticas(), carregarCanteiros(), carregarTimelineParaContainer(canteiroId, containerId)]);
                         } catch (err) {
                             showToast('Erro ao excluir evento do histórico.', 'error');
                         }
@@ -743,11 +1189,10 @@ async function carregarTimelineParaContainer(canteiroId, containerId) {
                 };
             }
 
-            // Clique para abrir detalhes completos
             const contentDiv = item.querySelector('.timeline-item__content');
             if (contentDiv) {
                 contentDiv.onclick = (e) => {
-                    if (e.target.closest('.timeline-item__delete-btn') || e.target.closest('.timeline-item__anexo') || e.target.closest('.timeline-item__img')) {
+                    if (e.target.closest('.timeline-item__delete-btn') || e.target.closest('.timeline-item__anexo')) {
                         return;
                     }
                     abrirModalDetalhesEvento(h);

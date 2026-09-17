@@ -110,6 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_inspecoes_data         ON inspecoes_avulsas(data_
 CREATE TABLE IF NOT EXISTS vps_canteiros (
     id            TEXT PRIMARY KEY, -- UUID
     nome          TEXT NOT NULL,
+    contrato      TEXT,             -- Contrato associado (ex: 251, 301)
     status        TEXT NOT NULL DEFAULT 'Em andamento' CHECK(status IN ('Em andamento', 'Concluída', 'Paralisada')),
     maturidade    INTEGER NOT NULL DEFAULT 1 CHECK(maturidade IN (1,2,3,4)),
     capa_1_path   TEXT,
@@ -138,6 +139,26 @@ CREATE TABLE IF NOT EXISTS vps_historico (
 
 CREATE INDEX IF NOT EXISTS idx_vps_historico_canteiro ON vps_historico(canteiro_id);
 CREATE INDEX IF NOT EXISTS idx_vps_canteiros_status ON vps_canteiros(status);
+
+-- ------------------------------------------------------------
+-- VPS - PENDÊNCIAS / ADEQUAÇÕES
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vps_pendencias (
+    id            TEXT PRIMARY KEY, -- UUID
+    historico_id  TEXT,             -- Opcional (pode ser nulo para pendências gerais)
+    canteiro_id   TEXT NOT NULL,
+    item          TEXT NOT NULL,
+    adequacao     TEXT,
+    responsavel   TEXT,
+    data          DATE,
+    status        TEXT NOT NULL DEFAULT 'Pendente',
+    criado_em     DATETIME DEFAULT (datetime('now','localtime')),
+    FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_vps_pendencias_historico ON vps_pendencias(historico_id);
+CREATE INDEX IF NOT EXISTS idx_vps_pendencias_canteiro ON vps_pendencias(canteiro_id);
+CREATE INDEX IF NOT EXISTS idx_vps_pendencias_status ON vps_pendencias(status);
 
 -- ------------------------------------------------------------
 -- N3 - HISTÓRICO DE ALTERAÇÕES

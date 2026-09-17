@@ -39,6 +39,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Servir uploads como estáticos (apenas o caminho é gravado no banco)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/Logo', express.static(path.join(__dirname, 'Logo')));
 
 // Middleware Anti-Cache estrito para todas as rotas de API
 app.use('/api', (req, res, next) => {

@@ -78,9 +78,9 @@ router.post('/adm', requireAdm, async (req, res) => {
         return res.status(400).json({ error: 'Todos os campos (Matrícula, Nome, Contrato e Senha) são obrigatórios para um ADM.' });
     }
 
-    // Valida contrato: até 3 dígitos numéricos
-    if (!/^\d{1,3}$/.test(contrato.trim())) {
-        return res.status(400).json({ error: 'O contrato deve conter até 3 dígitos numéricos.' });
+    // Valida contrato: permite números/contratos separados por vírgula (ex: 251 ou 251, 301)
+    if (!/^[0-9a-zA-Z,\s\-_]+$/.test(contrato.trim())) {
+        return res.status(400).json({ error: 'O contrato deve conter identificadores válidos (ex: 251 ou 251, 301).' });
     }
 
     try {
@@ -261,6 +261,32 @@ router.post('/me/photo', requireAuth, upload.single('avatar'), async (req, res) 
         await db.runAsync(`UPDATE usuarios SET foto_perfil = ? WHERE id = ?`, [photoUrl, userId]);
         req.session.usuario.foto_perfil = photoUrl; // Atualiza na sessão também
         res.json({ message: 'Foto atualizada com sucesso. Você agora é um Usuário Ouro!', url: photoUrl });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Alteração de Senha (Todos os Colaboradores Autenticados) ──
+router.patch('/me/password', requireAuth, async (req, res) => {
+    const { novaSenha, confirmaSenha } = req.body;
+    const userId = req.session.usuario.id;
+
+    if (!novaSenha || !confirmaSenha) {
+        return res.status(400).json({ error: 'Preencha a nova senha e a confirmação.' });
+    }
+
+    if (novaSenha !== confirmaSenha) {
+        return res.status(400).json({ error: 'As senhas digitadas não coincidem.' });
+    }
+
+    if (novaSenha.length < 4) {
+        return res.status(400).json({ error: 'A senha deve ter no mínimo 4 caracteres.' });
+    }
+
+    try {
+        const hash = bcrypt.hashSync(novaSenha, 10);
+        await db.runAsync(`UPDATE usuarios SET senha_hash = ? WHERE id = ?`, [hash, userId]);
+        res.json({ message: 'Senha alterada com sucesso!' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -165,10 +165,6 @@ function buildSidebar(user, activePage) {
         <aside class="sidebar" id="sidebar">
             <div class="sidebar__logo">
                 <img src="/Logo/logo.png" alt="Omega Safety Logo" class="sidebar-brand-logo" />
-                <div class="sidebar__logo-text">
-                    Omega Safety
-                    <span>Segurança do Trabalho</span>
-                </div>
             </div>
             <nav class="sidebar__nav">
                 <div class="sidebar__section-label">Navegação</div>
@@ -277,6 +273,20 @@ function ensureProfileModal(user) {
                 <button class="btn btn--secondary" id="btn-select-photo">Escolher Foto</button>
                 <button class="btn btn--primary" id="btn-save-photo" style="display:none;">Salvar Foto</button>
             </div>
+
+            <div class="profile-modal__password-section">
+                <button type="button" class="btn btn--outline btn--sm" id="btn-toggle-password-form">
+                    🔑 Mudar Senha
+                </button>
+                <div id="password-form-container" class="profile-modal__password-form" style="display: none;">
+                    <input type="password" id="input-new-password" class="modal-input" placeholder="Nova Senha" autocomplete="new-password">
+                    <input type="password" id="input-confirm-password" class="modal-input" placeholder="Confirmar Nova Senha" autocomplete="new-password">
+                    <div class="modal-form-actions">
+                        <button type="button" class="btn btn--primary btn--sm" id="btn-save-password">Salvar Senha</button>
+                        <button type="button" class="btn btn--secondary btn--sm" id="btn-cancel-password">Cancelar</button>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 
@@ -362,6 +372,65 @@ function ensureProfileModal(user) {
         }
     });
 
+    // Eventos de alteração de senha
+    const togglePwdBtn = document.getElementById('btn-toggle-password-form');
+    const pwdContainer = document.getElementById('password-form-container');
+    const savePwdBtn = document.getElementById('btn-save-password');
+    const cancelPwdBtn = document.getElementById('btn-cancel-password');
+    const newPwdInput = document.getElementById('input-new-password');
+    const confirmPwdInput = document.getElementById('input-confirm-password');
+
+    togglePwdBtn.addEventListener('click', () => {
+        const isHidden = pwdContainer.style.display === 'none';
+        pwdContainer.style.display = isHidden ? 'flex' : 'none';
+        if (!isHidden) {
+            newPwdInput.value = '';
+            confirmPwdInput.value = '';
+        }
+    });
+
+    cancelPwdBtn.addEventListener('click', () => {
+        pwdContainer.style.display = 'none';
+        newPwdInput.value = '';
+        confirmPwdInput.value = '';
+    });
+
+    savePwdBtn.addEventListener('click', async () => {
+        const novaSenha = newPwdInput.value.trim();
+        const confirmaSenha = confirmPwdInput.value.trim();
+
+        if (!novaSenha || !confirmaSenha) {
+            showToast('Preencha a nova senha e a confirmação.', 'warning');
+            return;
+        }
+
+        if (novaSenha !== confirmaSenha) {
+            showToast('As senhas digitadas não coincidem.', 'error');
+            return;
+        }
+
+        if (novaSenha.length < 4) {
+            showToast('A senha deve ter no mínimo 4 caracteres.', 'warning');
+            return;
+        }
+
+        savePwdBtn.disabled = true;
+        savePwdBtn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;margin-right:6px;"></span>Salvando...';
+
+        try {
+            const res = await api.patch('/users/me/password', { novaSenha, confirmaSenha });
+            showToast(res.message || 'Senha alterada com sucesso!', 'success');
+            pwdContainer.style.display = 'none';
+            newPwdInput.value = '';
+            confirmPwdInput.value = '';
+        } catch (err) {
+            showToast(err.error || err.message || 'Erro ao alterar senha.', 'error');
+        } finally {
+            savePwdBtn.disabled = false;
+            savePwdBtn.innerHTML = 'Salvar Senha';
+        }
+    });
+
     updateModalData(user);
 }
 
@@ -387,7 +456,26 @@ function updateModalData(user) {
 
     document.getElementById('btn-save-photo').style.display = 'none';
     document.getElementById('modal-preview-label').classList.remove('visible');
+
+    const pwdContainer = document.getElementById('password-form-container');
+    if (pwdContainer) pwdContainer.style.display = 'none';
+    const newPwdInput = document.getElementById('input-new-password');
+    if (newPwdInput) newPwdInput.value = '';
+    const confirmPwdInput = document.getElementById('input-confirm-password');
+    if (confirmPwdInput) confirmPwdInput.value = '';
 }
+
+// Injeta/Garante o Favicon do Capacete (Logo2) em todas as páginas
+(function ensureFavicon() {
+    let link = document.querySelector("link[rel*='icon']");
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/png';
+        document.getElementsByTagName('head')[0].appendChild(link);
+    }
+    link.href = '/Logo/logo2.png';
+})();
 
 // Exporta para window
 window.showToast = showToast;

@@ -47,6 +47,7 @@ async function initDB() {
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT'); } catch(e){}
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
     try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
+    try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN contrato TEXT'); } catch(e){}
 
     // Garantir que as colunas de lixeira existem na tabela cadernos_inspecao
     const cadernoCols = await db.allAsync("PRAGMA table_info(cadernos_inspecao)");
@@ -79,6 +80,42 @@ async function initDB() {
     if (!respColNames.includes('foto_3_path'))       { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN foto_3_path TEXT"); } catch(e){} }
     if (!respColNames.includes('subcategoria'))      { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN subcategoria TEXT"); } catch(e){} }
     if (!respColNames.includes('categoria'))         { try { await db.execAsync("ALTER TABLE caderno_respostas ADD COLUMN categoria TEXT"); } catch(e){} }
+    
+    // Migração automática vps_pendencias (Garante que historico_id é NULÁVEL para pendências gerais)
+    try {
+        const pendCols = await db.allAsync("PRAGMA table_info(vps_pendencias)");
+        const histCol = pendCols.find(c => c.name === 'historico_id');
+        if (histCol && histCol.notnull === 1) {
+            console.log('[DB] Migrando vps_pendencias para tornar historico_id nulável...');
+            await db.execAsync('PRAGMA foreign_keys=OFF');
+            await db.execAsync(`
+                CREATE TABLE IF NOT EXISTS vps_pendencias_new (
+                    id            TEXT PRIMARY KEY,
+                    historico_id  TEXT,
+                    canteiro_id   TEXT NOT NULL,
+                    item          TEXT NOT NULL,
+                    adequacao     TEXT,
+                    responsavel   TEXT,
+                    data          DATE,
+                    status        TEXT NOT NULL DEFAULT 'Pendente',
+                    criado_em     DATETIME DEFAULT (datetime('now','localtime')),
+                    FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE,
+                    FOREIGN KEY (historico_id) REFERENCES vps_historico(id) ON DELETE CASCADE ON UPDATE CASCADE
+                );
+                INSERT INTO vps_pendencias_new (id, historico_id, canteiro_id, item, adequacao, responsavel, data, status, criado_em)
+                SELECT id, NULLIF(historico_id, ''), canteiro_id, item, adequacao, responsavel, data, status, criado_em FROM vps_pendencias;
+                DROP TABLE vps_pendencias;
+                ALTER TABLE vps_pendencias_new RENAME TO vps_pendencias;
+                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_historico ON vps_pendencias(historico_id);
+                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_canteiro ON vps_pendencias(canteiro_id);
+                CREATE INDEX IF NOT EXISTS idx_vps_pendencias_status ON vps_pendencias(status);
+            `);
+            await db.execAsync('PRAGMA foreign_keys=ON');
+            console.log('[DB] Migração vps_pendencias concluída!');
+        }
+    } catch(e) {
+        console.error('[DB] Erro na migração vps_pendencias:', e);
+    }
     
     console.log('[DB] Schema inicializado e migrado.');
 

@@ -169,9 +169,9 @@ function setupUserList() {
             const novoContrato = document.getElementById(`edit-contrato-${id}`).value.trim();
             const novaLideranca = parseInt(document.getElementById(`edit-lideranca-${id}`).value, 10);
             
-            // Validação de Contrato: obrigatoriamente 3 dígitos numéricos se fornecido
-            if (novoContrato && !/^\d{3}$/.test(novoContrato)) {
-                showToast('O contrato deve conter exatamente 3 dígitos numéricos (ou ficar em branco).', 'error');
+            // Validação de Contrato: aceita contrato único ou múltiplos separados por vírgula
+            if (novoContrato && !/^[0-9a-zA-Z,\s\-_]+$/.test(novoContrato)) {
+                showToast('Formato de contrato inválido (ex: 251 ou 251, 301).', 'error');
                 return;
             }
             
@@ -454,9 +454,9 @@ function setupAdmLogic() {
             return;
         }
 
-        // Validação: até 3 dígitos numéricos
-        if (!/^\d{1,3}$/.test(contrato)) {
-            showToast('O contrato deve conter até 3 dígitos numéricos.', 'error');
+        // Validação: formato de contrato válido (ex: 251 ou 251, 301)
+        if (!/^[0-9a-zA-Z,\s\-_]+$/.test(contrato)) {
+            showToast('Formato de contrato inválido (ex: 251 ou 251, 301).', 'error');
             return;
         }
 
