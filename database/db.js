@@ -85,7 +85,7 @@ async function initDB() {
             nome          VARCHAR(255) NOT NULL,
             funcao        VARCHAR(255),
             lideranca     VARCHAR(255),
-            perfil        VARCHAR(50) NOT NULL DEFAULT 'operacional',
+            perfil        VARCHAR(255) NOT NULL DEFAULT 'operacional',
             contrato      VARCHAR(255),
             foto_perfil   TEXT,
             senha_hash    TEXT,
@@ -113,7 +113,7 @@ async function initDB() {
             matricula_observador   VARCHAR(255) NOT NULL,
             nome_observador        VARCHAR(255) NOT NULL,
             lideranca              VARCHAR(255) NOT NULL,
-            nivel                  VARCHAR(50),
+            nivel                  TEXT,
             local_ss               VARCHAR(255) NOT NULL,
             descricao_situacao     TEXT NOT NULL,
             categoria              VARCHAR(255),
@@ -123,7 +123,7 @@ async function initDB() {
             empresa_responsavel    VARCHAR(255),
             lideranca_responsavel  VARCHAR(255),
             prazo_vencimento       DATE,
-            status                 VARCHAR(50) DEFAULT 'Em Análise',
+            status                 VARCHAR(255) DEFAULT 'Em Análise',
             evidencia_1_path       TEXT,
             evidencia_2_path       TEXT,
             observacoes_adm        TEXT,
@@ -158,7 +158,7 @@ async function initDB() {
             id            VARCHAR(255) PRIMARY KEY,
             nome          VARCHAR(255) NOT NULL,
             contrato      VARCHAR(255),
-            status        VARCHAR(50) DEFAULT 'Em andamento',
+            status        VARCHAR(255) DEFAULT 'Em andamento',
             maturidade    INTEGER DEFAULT 1,
             capa_1_path   TEXT,
             capa_2_path   TEXT,
@@ -175,6 +175,7 @@ async function initDB() {
             descricao        TEXT,
             evidencia_1_path TEXT,
             evidencia_2_path TEXT,
+            evidencia_3_path TEXT,
             anexo_path       TEXT,
             criado_por       VARCHAR(255),
             criado_em        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -189,7 +190,7 @@ async function initDB() {
             adequacao     TEXT,
             responsavel   VARCHAR(255),
             data          DATE,
-            status        VARCHAR(50) DEFAULT 'Pendente',
+            status        VARCHAR(255) DEFAULT 'Pendente',
             criado_em     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (canteiro_id) REFERENCES vps_canteiros(id) ON DELETE CASCADE ON UPDATE CASCADE
         );
@@ -209,7 +210,7 @@ async function initDB() {
             contrato        VARCHAR(255),
             subcategoria    VARCHAR(255),
             categoria       VARCHAR(255),
-            status          VARCHAR(50) DEFAULT 'ativo',
+            status          VARCHAR(255) DEFAULT 'ativo',
             criado_por      VARCHAR(255),
             atualizado_por  VARCHAR(255),
             excluido_em     TIMESTAMP,
@@ -264,11 +265,15 @@ async function initDB() {
 
         await db.execAsync(postgresSchema);
 
+        try { await db.execAsync('ALTER TABLE n3_registros ALTER COLUMN nivel TYPE TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE n3_registros ALTER COLUMN status TYPE VARCHAR(255)'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE usuarios ALTER COLUMN perfil TYPE VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil TEXT'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_lideranca INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_master INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE vps_historico ADD COLUMN IF NOT EXISTS evidencia_3_path TEXT'); } catch(e){}
 
     } else {
         await db.runAsync('PRAGMA journal_mode=WAL');
