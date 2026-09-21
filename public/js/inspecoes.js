@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('insp-btn-cancel').addEventListener('click', closeNovaInspecaoModal);
     document.getElementById('insp-btn-submit').addEventListener('click', submitNovaInspecao);
     document.getElementById('btn-realizar-inspecao').addEventListener('click', openNovaInspecaoModal);
+    document.getElementById('fab-realizar-inspecao')?.addEventListener('click', openNovaInspecaoModal);
     document.getElementById('insp-caderno-select').addEventListener('change', inspLoadPerguntas);
     document.getElementById('insp-contrato').addEventListener('change', () => loadInspLiderancas());
 

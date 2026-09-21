@@ -1272,3 +1272,75 @@
     border-top: 1px dashed #27272a;
     padding-top: 6px;
 }
+
+/* ── Otimização Mobile: Redimensionamento dos Cards de N3 / Inspeções ── */
+@media (max-width: 768px) {
+    .n3-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .n3-card {
+        border-radius: var(--radius-md);
+    }
+
+    .n3-card__photo,
+    .n3-card__photo-placeholder {
+        height: 125px;
+    }
+
+    .n3-card__photo-placeholder {
+        font-size: 2.2rem;
+    }
+
+    .n3-card__body {
+        padding: 10px 12px;
+    }
+
+    .n3-card__title {
+        font-size: 0.875rem;
+        line-height: 1.35;
+        margin-bottom: 4px;
+    }
+
+    .n3-card__meta {
+        gap: 4px 8px;
+        margin-top: 6px;
+        font-size: 0.75rem;
+    }
+
+    .n3-card__footer {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
+
+    .n3-date-group {
+        margin-bottom: 14px;
+    }
+
+    .n3-date-group__header {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        margin-bottom: 8px;
+    }
+
+    .n3-list-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .n3-filters {
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .filter-btn {
+        padding: 6px 10px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+}
+

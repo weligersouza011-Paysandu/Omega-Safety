@@ -23,12 +23,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Treinamentos ──────────────────────────────────────────
     loadTrainings(user);
 
+    // ── Stats Pessoais (todos os perfis) ──────────────────────
+    loadCollabStats();
+
     // ── Stats ADM ─────────────────────────────────────────────
     if (user.perfil === 'adm') {
         document.getElementById('stats-section').classList.remove('hidden');
         loadAdmStats();
     }
 });
+
 
 async function loadTrainings(user) {
     const body  = document.getElementById('trainings-body');
@@ -104,4 +108,29 @@ async function loadAdmStats() {
     } catch (err) {
         console.error('Erro ao carregar stats ADM:', err);
     }
+}
+
+async function loadCollabStats() {
+    try {
+        // Inspeções do usuário logado
+        const insp = await api.get('/inspecoes?minhas=1&limit=1');
+        const totalInsp = insp.total ?? (Array.isArray(insp) ? insp.length : null);
+        const elInsp = document.getElementById('cs-val-inspecoes');
+        if (elInsp) elInsp.textContent = totalInsp !== null ? totalInsp : '—';
+    } catch { /* silencia — API pode não ter filtro 'minhas' */ }
+
+    try {
+        // NIs (N3) registradas pelo usuário
+        const n3 = await api.get('/n3?minhas=1&limit=1');
+        const totalN3 = n3.total ?? (Array.isArray(n3) ? n3.length : null);
+        const elN3 = document.getElementById('cs-val-n3');
+        if (elN3) elN3.textContent = totalN3 !== null ? totalN3 : '—';
+    } catch { /* silencia */ }
+
+    try {
+        // Treinamentos do colaborador
+        const trein = await api.get('/treinamentos');
+        const elT = document.getElementById('cs-val-trein');
+        if (elT) elT.textContent = Array.isArray(trein) ? trein.length : '—';
+    } catch { /* silencia */ }
 }

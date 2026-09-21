@@ -280,3 +280,73 @@
 @media (max-width: 900px) {
     .module-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Stats Pessoais do Colaborador ── */
+.collab-stats {
+    display:               grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:                   var(--space-md);
+    margin-bottom:         var(--space-xl);
+}
+
+.collab-stat-card {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding:       var(--space-md) var(--space-sm);
+    text-align:    center;
+    transition:    all var(--transition-normal);
+    cursor:        default;
+}
+
+.collab-stat-card:hover {
+    border-color: rgba(139,28,49,0.4);
+    background:   var(--color-bg-hover);
+    transform:    translateY(-2px);
+    box-shadow:   var(--shadow-md);
+}
+
+.collab-stat-card--soon {
+    opacity: 0.45;
+    cursor:  not-allowed;
+}
+.collab-stat-card--soon:hover {
+    transform: none;
+    border-color: var(--color-border);
+    background:   var(--color-bg-card);
+    box-shadow:   none;
+}
+
+.collab-stat-card__icon  { font-size: 1.6rem; margin-bottom: 6px; }
+.collab-stat-card__value {
+    font-size:   var(--font-size-2xl);
+    font-weight: 800;
+    color:       var(--color-text-primary);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.collab-stat-card__label {
+    font-size:      var(--font-size-xs);
+    color:          var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight:    600;
+}
+
+/* Mobile: 2 colunas */
+@media (max-width: 768px) {
+    .collab-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-sm);
+        margin-bottom: var(--space-lg);
+    }
+    .collab-stat-card { padding: var(--space-sm); }
+    .collab-stat-card__value { font-size: var(--font-size-xl); }
+
+    /* Cards de módulo ficam maiores no mobile para toque */
+    .module-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+    .module-card { height: 160px; }
+}

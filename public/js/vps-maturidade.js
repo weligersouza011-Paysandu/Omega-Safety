@@ -614,7 +614,7 @@ function renderCardStatusBadge(cardStatus) {
     }
 
     if (cardStatus.hasDiamante) {
-        const verdes = cardStatus.totalVerdes || 0;
+        const verdes = cardStatus.verdesPostDiamante || 0;
         const verdesBadge = verdes > 0 
             ? `<span style="background: rgba(34, 197, 94, 0.25); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
                 🟢 ${verdes} Verde${verdes > 1 ? 's' : ''}
@@ -622,7 +622,7 @@ function renderCardStatusBadge(cardStatus) {
             : '';
 
         return `
-            <div class="canteiro-card__last-card-legend" title="Card Diamante mantido permanentemente (${verdes} Verde(s) acumulados)" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.92); backdrop-filter: blur(4px); border: 1px solid #3b82f6; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.35); max-width: calc(100% - 55px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+            <div class="canteiro-card__last-card-legend" title="Card Diamante (${verdes} Verde(s) consecutivo(s))" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(11, 19, 41, 0.92); backdrop-filter: blur(4px); border: 1px solid #3b82f6; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 10px rgba(59,130,246,0.35); max-width: calc(100% - 55px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
                 <span style="font-size: 13px;">💎</span>
                 <span>Card Diamante</span>
                 ${verdesBadge}
@@ -641,8 +641,9 @@ function renderCardStatusBadge(cardStatus) {
         subtext = ' (Interdição)';
     } else if (cardStatus.ultimoCard === 'Verde') {
         cardColor = '#22c55e'; cardIcon = '🟢'; cardLabel = 'Verde';
-        if (cardStatus.totalVerdes > 1) {
-            subtext = ` (${cardStatus.totalVerdes}x)`;
+        const verdesConsecutivos = cardStatus.consecutiveVerdes !== undefined ? cardStatus.consecutiveVerdes : (cardStatus.totalVerdes || 0);
+        if (verdesConsecutivos > 1) {
+            subtext = ` (${verdesConsecutivos}x)`;
         }
     }
 

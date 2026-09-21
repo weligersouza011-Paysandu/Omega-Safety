@@ -32,6 +32,7 @@ const upload = multer({
 function calcularStatusCardCanteiro(historyList) {
     let hasDiamante = false;
     let verdesPostDiamante = 0;
+    let consecutiveVerdes = 0;
     let totalVerdes = 0;
     let totalDiamantes = 0;
     let totalAmarelos = 0;
@@ -43,6 +44,7 @@ function calcularStatusCardCanteiro(historyList) {
         return {
             hasDiamante: false,
             verdesPostDiamante: 0,
+            consecutiveVerdes: 0,
             totalVerdes: 0,
             totalDiamantes: 0,
             totalAmarelos: 0,
@@ -62,19 +64,23 @@ function calcularStatusCardCanteiro(historyList) {
         if (tipo === 'Diamante') {
             hasDiamante = true;
             verdesPostDiamante = 0;
+            consecutiveVerdes = 0;
             totalDiamantes++;
         } else if (tipo === 'Verde') {
             totalVerdes++;
+            consecutiveVerdes++;
             if (hasDiamante) {
                 verdesPostDiamante++;
             }
         } else if (tipo === 'Amarelo') {
             hasDiamante = false;
             verdesPostDiamante = 0;
+            consecutiveVerdes = 0;
             totalAmarelos++;
         } else if (tipo === 'Vermelho') {
             hasDiamante = false;
             verdesPostDiamante = 0;
+            consecutiveVerdes = 0;
             totalVermelhos++;
         }
     }
@@ -82,6 +88,7 @@ function calcularStatusCardCanteiro(historyList) {
     return {
         hasDiamante,
         verdesPostDiamante,
+        consecutiveVerdes,
         totalVerdes,
         totalDiamantes,
         totalAmarelos,

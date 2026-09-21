@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treinamentos — Omega Safety</title>
+    <link rel="icon" type="image/png" href="/Logo/logo2.png">
+    <meta name="description" content="Dashboard de Treinamentos — Indicadores e controle de validade de treinamentos de segurança.">
+    <link rel="stylesheet" href="/css/variables.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <link rel="stylesheet" href="/css/treinamentos.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app-layout">
+    <div id="sidebar-root"></div>
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <h1 class="page-header__title">Gestão de Treinamentos</h1>
+                <p class="page-header__subtitle">Indicadores visuais de prazos, reciclagem e conformidade</p>
+            </div>
+            <div id="header-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                <a href="/api/treinamentos/modelo" download class="btn-trein btn-trein--ghost">
+                    <i class="fa-solid fa-file-excel" style="color:#22c55e;"></i> Planilha Modelo
+                </a>
+                <a href="/api/treinamentos/exportar" download class="btn-trein btn-trein--ghost">
+                    <i class="fa-solid fa-file-csv" style="color:#60a5fa;"></i> Exportar CSV
+                </a>
+                <button onclick="abrirModalImportar()" class="btn-trein btn-trein--primary">
+                    <i class="fa-solid fa-file-import"></i> Importar
+                </button>
+                <button onclick="carregarTreinamentos()" class="btn-trein btn-trein--ghost" title="Atualizar"><i class="fa-solid fa-rotate-right"></i></button>
+            </div>
+        </header>
+
+        <div class="page-body">
+            <!-- CARDS -->
+            <div class="trein-cards-grid">
+                <div onclick="filtrarPorCard('Vencido')" class="trein-card trein-card--vencido">
+                    <i class="trein-card__icon fa-solid fa-circle-exclamation"></i>
+                    <div class="trein-card__label">Vencidos</div>
+                    <div id="card-vencidos" class="trein-card__value">0</div>
+                    <span class="trein-card__tag">Ação Imediata</span>
+                </div>
+                <div onclick="filtrarPorCard('Crítico')" class="trein-card trein-card--critico">
+                    <i class="trein-card__icon fa-solid fa-triangle-exclamation"></i>
+                    <div class="trein-card__label">Crítico (1 a 5 dias)</div>
+                    <div id="card-criticos" class="trein-card__value">0</div>
+                    <span class="trein-card__tag">Agendar Reciclagem</span>
+                </div>
+                <div onclick="filtrarPorCard('Atenção')" class="trein-card trein-card--atencao">
+                    <i class="trein-card__icon fa-solid fa-clock"></i>
+                    <div class="trein-card__label">Atenção (6 a 30 dias)</div>
+                    <div id="card-atencao" class="trein-card__value">0</div>
+                    <span class="trein-card__tag">Planejamento</span>
+                </div>
+                <div onclick="filtrarPorCard('Em Dia')" class="trein-card trein-card--emdia">
+                    <i class="trein-card__icon fa-solid fa-circle-check"></i>
+                    <div class="trein-card__label">Em Dia (&gt; 30 dias)</div>
+                    <div id="card-em-dia" class="trein-card__value">0</div>
+                    <span class="trein-card__tag">Conforme</span>
+                </div>
+            </div>
+
+            <!-- FILTROS -->
+            <div class="trein-filtros" style="margin-bottom:20px;">
+                <div class="trein-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="search-input" oninput="aplicarFiltros()" placeholder="Buscar por Nome, Matrícula ou Treinamento...">
+                </div>
+                <select id="funcao-select" onchange="aplicarFiltros()" class="trein-select">
+                    <option value="">Todas as Funções</option>
+                </select>
+                <div class="trein-pills">
+                    <button class="btn-status trein-pill active" onclick="selecionarStatusFilter(this, '')">Todos</button>
+                    <button class="btn-status trein-pill" onclick="selecionarStatusFilter(this, 'Vencido')">Vencidos</button>
+                    <button class="btn-status trein-pill" onclick="selecionarStatusFilter(this, 'Crítico')">Críticos</button>
+                    <button class="btn-status trein-pill" onclick="selecionarStatusFilter(this, 'Atenção')">Atenção</button>
+                    <button class="btn-status trein-pill" onclick="selecionarStatusFilter(this, 'Em Dia')">Em Dia</button>
+                </div>
+            </div>
+
+            <!-- TABELA -->
+            <div class="trein-table-wrap">
+                <div style="overflow-x:auto;">
+                    <table class="trein-table">
+                        <thead>
+                            <tr>
+                                <th style="width:40px;text-align:center;"><input type="checkbox" id="chk-all" class="chk-row" onchange="toggleSelectAll(this)"></th>
+                                <th>Colaborador</th>
+                                <th>Função</th>
+                                <th>Treinamento</th>
+                                <th style="text-align:center;">Realização</th>
+                                <th style="text-align:center;">Vencimento</th>
+                                <th style="text-align:center;">Dias Rest.</th>
+                                <th style="text-align:center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+                <div id="loading-state" class="trein-state"><i class="fa-solid fa-spinner spin"></i><p>Carregando dados...</p></div>
+                <div id="empty-state" class="trein-state" style="display:none;"><i class="fa-solid fa-folder-open"></i><p class="text-base">Nenhum treinamento encontrado.</p><small>Tente ajustar a busca ou os filtros.</small></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- BARRA DE AÇÕES EM LOTE (Flutuante) -->
+<div id="bulk-bar" class="bulk-bar">
+    <div class="bulk-bar__inner">
+        <span class="bulk-bar__info"><strong id="bulk-count">0</strong> registro(s) selecionado(s)</span>
+        <div class="bulk-bar__actions">
+            <button onclick="gerarCertificadosLote()" class="btn-trein btn-trein--pdf">
+                <i class="fa-solid fa-file-pdf"></i> Gerar Certificados (PDF)
+            </button>
+            <button onclick="abrirModalExcluir()" class="btn-trein btn-trein--danger">
+                <i class="fa-solid fa-trash-can"></i> Excluir Selecionados
+            </button>
+            <button onclick="limparSelecao()" class="btn-trein btn-trein--cancel">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO -->
+<div id="modal-excluir" class="trein-modal-overlay">
+    <div class="trein-modal" style="text-align:center;">
+        <div class="trein-modal__icon trein-modal__icon--danger"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h3>Confirmar Exclusão em Lote</h3>
+        <p>Tem certeza que deseja remover <strong id="del-count" style="color:#ef4444;">0</strong> registro(s)? Esta ação é irreversível.</p>
+        <div class="trein-modal__footer" style="justify-content:center;">
+            <button onclick="fecharModalExcluir()" class="btn-trein btn-trein--cancel">Cancelar</button>
+            <button onclick="executarExclusaoLote()" id="btn-confirmar-exclusao" class="btn-trein btn-trein--danger">
+                <i class="fa-solid fa-trash-can"></i> Sim, Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE IMPORTAÇÃO -->
+<div id="modal-importar" class="trein-modal-overlay">
+    <div class="trein-modal trein-modal--wide" style="position:relative;">
+        <button onclick="fecharModalImportar()" class="trein-modal__close">&times;</button>
+        <h3 style="display:flex;align-items:center;gap:8px;">
+            <i class="fa-solid fa-file-import" style="color:var(--color-red-primary);"></i> Importar Planilha
+        </h3>
+        <p style="margin-bottom:20px;">Selecione uma planilha (.xlsx, .xls, .csv) para importação em lote.</p>
+        <form id="form-importar" onsubmit="enviarImportacao(event)">
+            <div class="drop-zone">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>Clique para selecionar o arquivo</p>
+                <span>Formatos: .xlsx, .xls, .csv</span>
+                <input type="file" id="input-arquivo-importar" accept=".xlsx,.xls,.csv" required class="styled-file">
+            </div>
+            <div id="import-loading" style="display:none;padding:16px;text-align:center;color:var(--color-text-secondary);">
+                <i class="fa-solid fa-spinner spin" style="font-size:1.8rem;color:var(--color-red-primary);"></i>
+                <p style="font-size:12px;margin-top:8px;">Processando planilha...</p>
+            </div>
+            <div id="import-result" class="import-result"></div>
+            <div class="trein-modal__footer">
+                <button type="button" onclick="fecharModalImportar()" class="btn-trein btn-trein--cancel">Cancelar</button>
+                <button type="submit" id="btn-submit-importar" class="btn-trein btn-trein--primary">
+                    <i class="fa-solid fa-upload"></i> Processar Importação
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script>
+let todosTreinamentos = [];
+let statusSelecionado = '';
+let idsSelecionados = new Set();
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const user = await requireLogin();
+    if (user) {
+        document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'treinamentos');
+        initLogout();
+        carregarTreinamentos();
+    }
+});
+
+// ── Carregar dados ──
+async function carregarTreinamentos() {
+    exibirLoading(true);
+    limparSelecao();
+    try {
+        const data = await api.get('/treinamentos');
+        if (Array.isArray(data)) {
+            todosTreinamentos = data;
+            const resumo = {
+                vencidos: data.filter(r => r.situacao === 'vencido' || r.status_vencimento === 'Vencido').length,
+                criticos: data.filter(r => r.status_vencimento === 'Crítico').length,
+                atencao: data.filter(r => r.situacao === 'alerta' || r.status_vencimento === 'Atenção').length,
+                em_dia: data.filter(r => r.situacao === 'ok' || r.status_vencimento === 'Em Dia').length
+            };
+            atualizarCardsResumo(resumo);
+            popularDropdownFuncoes(todosTreinamentos);
+            aplicarFiltros();
+        }
+    } catch (e) {
+        console.error(e);
+        mostrarStateVazio(true, 'Erro ao carregar treinamentos.');
+    } finally {
+        exibirLoading(false);
+    }
+}
+
+function atualizarCardsResumo(r) {
+    document.getElementById('card-vencidos').innerText = r.vencidos || 0;
+    document.getElementById('card-criticos').innerText = r.criticos || 0;
+    document.getElementById('card-atencao').innerText = r.atencao || 0;
+    document.getElementById('card-em-dia').innerText = r.em_dia || 0;
+}
+
+function popularDropdownFuncoes(dados) {
+    const sel = document.getElementById('funcao-select');
+    const cur = sel.value;
+    const funcoes = [...new Set(dados.map(i => i.funcao).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">Todas as Funções</option>';
+    funcoes.forEach(f => { const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o); });
+    sel.value = cur;
+}
+
+// ── Filtros ──
+function selecionarStatusFilter(el, status) {
+    statusSelecionado = status;
+    document.querySelectorAll('.btn-status').forEach(b => { b.classList.remove('active'); });
+    el.classList.add('active');
+    aplicarFiltros();
+}
+function filtrarPorCard(status) {
+    document.querySelectorAll('.btn-status').forEach(b => { if (b.innerText.includes(status)) selecionarStatusFilter(b, status); });
+}
+
+function getStatus(item) {
+    return item.status_vencimento || (item.situacao === 'vencido' ? 'Vencido' : item.situacao === 'alerta' ? 'Atenção' : 'Em Dia');
+}
+
+function aplicarFiltros() {
+    const q = document.getElementById('search-input').value.toLowerCase().trim();
+    const fn = document.getElementById('funcao-select').value;
+    const res = todosTreinamentos.filter(item => {
+        const st = getStatus(item);
+        if (statusSelecionado && st !== statusSelecionado) return false;
+        if (fn && item.funcao !== fn) return false;
+        if (q && !(
+            (item.nome || '').toLowerCase().includes(q) ||
+            (item.nome_colaborador || '').toLowerCase().includes(q) ||
+            (item.matricula || '').toLowerCase().includes(q) ||
+            (item.nome_treinamento || '').toLowerCase().includes(q)
+        )) return false;
+        return true;
+    });
+    renderizarTabela(res);
+}
+
+// ── Renderizar tabela com checkboxes ──
+function renderizarTabela(dados) {
+    const tbody = document.getElementById('table-body');
+    tbody.innerHTML = '';
+    document.getElementById('chk-all').checked = false;
+    if (!dados.length) { mostrarStateVazio(true); return; }
+    mostrarStateVazio(false);
+
+    dados.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-750 transition-colors';
+        const st = getStatus(item);
+        const dias = item.dias_para_vencer !== undefined ? item.dias_para_vencer : daysUntil(item.data_vencimento);
+        const diasHTML = dias < 0
+            ? `<span class="text-red-400 font-semibold">${dias}d</span>`
+            : `<span class="text-slate-300 font-medium">${dias}d</span>`;
+        const checked = idsSelecionados.has(item.id) ? 'checked' : '';
+
+        tr.innerHTML = `
+            <td class="py-3 px-3 text-center"><input type="checkbox" class="chk-row chk-item" data-id="${item.id}" ${checked} onchange="onCheckChange()"></td>
+            <td class="py-3 px-4"><div class="font-medium text-slate-100">${esc(item.nome_colaborador||item.nome)}</div><div class="text-xs text-slate-400">Mat: ${esc(item.matricula)}</div></td>
+            <td class="py-3 px-4 text-slate-300">${esc(item.funcao||'N/A')}</td>
+            <td class="py-3 px-4 font-medium text-indigo-300">${esc(item.nome_treinamento)}</td>
+            <td class="py-3 px-4 text-center text-slate-400 text-xs">${formatDate(item.data_realizacao)}</td>
+            <td class="py-3 px-4 text-center font-medium text-slate-200 text-xs">${formatDate(item.data_vencimento)}</td>
+            <td class="py-3 px-4 text-center text-xs">${diasHTML}</td>
+            <td class="py-3 px-4 text-center">${badge(st)}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+function badge(s) {
+    const m = {
+        'Vencido':  { c:'red',     l:'Vencido' },
+        'vencido':  { c:'red',     l:'Vencido' },
+        'Crítico':  { c:'orange',  l:'Crítico' },
+        'Atenção':  { c:'yellow',  l:'Atenção' },
+        'alerta':   { c:'yellow',  l:'Atenção' },
+        'Em Dia':   { c:'emerald', l:'Em Dia' },
+        'ok':       { c:'emerald', l:'Em Dia' },
+    };
+    const e = m[s] || m['ok'];
+    return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-${e.c}-500/10 text-${e.c}-400 border border-${e.c}-500/20"><span class="w-1.5 h-1.5 rounded-full bg-${e.c}-500"></span>${e.l}</span>`;
+}
+
+// ── Seleção em lote ──
+function toggleSelectAll(master) {
+    document.querySelectorAll('.chk-item').forEach(cb => { cb.checked = master.checked; });
+    onCheckChange();
+}
+
+function onCheckChange() {
+    idsSelecionados.clear();
+    document.querySelectorAll('.chk-item:checked').forEach(cb => idsSelecionados.add(Number(cb.dataset.id)));
+    const bar = document.getElementById('bulk-bar');
+    const count = idsSelecionados.size;
+    document.getElementById('bulk-count').innerText = count;
+    if (count > 0) { bar.classList.add('active'); } else { bar.classList.remove('active'); }
+    // sync master checkbox
+    const all = document.querySelectorAll('.chk-item');
+    const chkAll = document.getElementById('chk-all');
+    chkAll.checked = all.length > 0 && count === all.length;
+    chkAll.indeterminate = count > 0 && count < all.length;
+}
+
+function limparSelecao() {
+    idsSelecionados.clear();
+    document.querySelectorAll('.chk-item').forEach(cb => cb.checked = false);
+    document.getElementById('chk-all').checked = false;
+    document.getElementById('bulk-bar').classList.remove('active');
+    document.getElementById('bulk-count').innerText = '0';
+}
+
+// ── Certificados PDF em Lote ──
+async function gerarCertificadosLote() {
+    const ids = [...idsSelecionados];
+    if (!ids.length) return;
+    try {
+        showToast(`Gerando ${ids.length} certificado(s)...`, 'warning', 3000);
+        const resp = await fetch('/api/treinamentos/certificados-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        if (!resp.ok) { const e = await resp.json(); throw new Error(e.error || 'Erro'); }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = ids.length === 1 ? `certificado_${ids[0]}.pdf` : 'certificados_treinamentos.zip';
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast('Download iniciado com sucesso!', 'success');
+    } catch (e) {
+        console.error(e);
+        showToast(e.message || 'Erro ao gerar certificados.', 'error');
+    }
+}
+
+// ── Exclusão em lote ──
+function abrirModalExcluir() {
+    document.getElementById('del-count').innerText = idsSelecionados.size;
+    document.getElementById('modal-excluir').classList.add('active');
+}
+function fecharModalExcluir() { document.getElementById('modal-excluir').classList.remove('active'); }
+
+async function executarExclusaoLote() {
+    const ids = [...idsSelecionados];
+    const btn = document.getElementById('btn-confirmar-exclusao');
+    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Excluindo...';
+    try {
+        const resp = await fetch('/api/treinamentos/lote', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            showToast(data.message, 'success');
+            fecharModalExcluir();
+            limparSelecao();
+            carregarTreinamentos();
+        } else {
+            showToast(data.error || 'Erro ao excluir.', 'error');
+        }
+    } catch (e) {
+        showToast('Erro de conexão.', 'error');
+    } finally {
+        btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-trash-can"></i> Sim, Excluir';
+    }
+}
+
+// ── Importação ──
+function abrirModalImportar() {
+    document.getElementById('modal-importar').classList.add('active');
+    document.getElementById('import-result').style.display = 'none';
+    document.getElementById('form-importar').reset();
+}
+function fecharModalImportar() { document.getElementById('modal-importar').classList.remove('active'); }
+
+async function enviarImportacao(ev) {
+    ev.preventDefault();
+    const fi = document.getElementById('input-arquivo-importar');
+    if (!fi.files[0]) return;
+    const fd = new FormData(); fd.append('file', fi.files[0]);
+    const ld = document.getElementById('import-loading');
+    const rs = document.getElementById('import-result');
+    const bt = document.getElementById('btn-submit-importar');
+    ld.style.display = ''; rs.style.display = 'none'; bt.disabled = true;
+    try {
+        const r = await fetch('/api/treinamentos/importar', { method:'POST', body:fd });
+        const d = await r.json();
+        ld.style.display = 'none'; bt.disabled = false; rs.style.display = '';
+        if (r.ok && d.success) {
+            let errH = '';
+            if (d.erros && d.erros.length) errH = `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--color-border);max-height:120px;overflow-y:auto;"><p style="color:#fca5a5;font-weight:700;">Erros (${d.erros.length}):</p><ul style="padding-left:16px;">${d.erros.map(e=>`<li>Linha ${e.linha}: ${esc(e.motivo)}</li>`).join('')}</ul></div>`;
+            rs.className = 'import-result success';
+            rs.innerHTML = `<p style="font-weight:700;"><i class="fa-solid fa-circle-check"></i> Importação concluída!</p><p>${d.message}</p><p>Processados: ${d.total_processados} | Inseridos: ${d.inseridos}</p>${errH}`;
+            carregarTreinamentos();
+        } else {
+            rs.className = 'import-result error';
+            rs.innerHTML = `<p style="font-weight:700;"><i class="fa-solid fa-triangle-exclamation"></i> Falha</p><p>${d.error||d.message||'Erro.'}</p>`;
+        }
+    } catch(e) {
+        ld.style.display = 'none'; bt.disabled = false; rs.style.display = '';
+        rs.className = 'import-result error';
+        rs.innerHTML = '<p style="font-weight:700;">Erro de conexão.</p>';
+    }
+}
+
+// ── Helpers ──
+function exibirLoading(v) {
+    document.getElementById('loading-state').style.display = v ? '' : 'none';
+}
+function mostrarStateVazio(v, m) {
+    const el = document.getElementById('empty-state');
+    if (m) el.querySelector('p.text-base').innerText = m;
+    el.style.display = v ? '' : 'none';
+}
+function esc(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+</script>
+</body>
+</html>

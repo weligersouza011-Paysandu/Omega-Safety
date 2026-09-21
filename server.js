@@ -88,6 +88,8 @@ app.use('/api/vps', require('./routes/vps'));
 //  Rotas do Front-End (Sem extensão .html)
 // ────────────────────────────────────────────────
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/treinamentos', (req, res) => res.sendFile(path.join(__dirname, 'public', 'treinamentos.html')));
+app.get('/admin/treinamentos', (req, res) => res.sendFile(path.join(__dirname, 'public', 'treinamentos.html')));
 app.get('/inspecoes', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inspecoes.html')));
 app.get('/admin/users', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin', 'usuarios.html')));
 app.get('/vps/maturidade', (req, res) => res.sendFile(path.join(__dirname, 'public', 'vps', 'maturidade.html')));

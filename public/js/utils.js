@@ -135,31 +135,47 @@ async function requireLogin(role = null) {
 function buildSidebar(user, activePage) {
     const isAdm = user.perfil === 'adm';
     const navLinks = [
-        { href: '/dashboard', icon: '🏠', label: 'Início', key: 'dashboard' },
-        { href: '/inspecoes', icon: '🔍', label: 'Inspeções', key: 'inspecoes' },
-        { href: '/n3', icon: '⚠️', label: 'N3', key: 'n3' },
+        { href: '/dashboard', icon: '\uD83C\uDFE0', label: 'Início', key: 'dashboard' },
+        { href: '/inspecoes', icon: '\uD83D\uDD0D', label: 'Inspeções', key: 'inspecoes' },
+        { href: '/n3', icon: '\u26A0\uFE0F', label: 'N3', key: 'n3' },
+        { href: '/treinamentos', icon: '\uD83D\uDCCB', label: 'Treinamentos', key: 'treinamentos' },
     ];
     if (isAdm) {
-        navLinks.push({ href: '/vps/maturidade', icon: '📈', label: 'Maturidade VPS', key: 'vps' });
-        navLinks.push({ href: '/admin/treinamentos', icon: '📋', label: 'Treinamentos', key: 'treinamentos' });
-        navLinks.push({ href: '/admin/users', icon: '👥', label: 'Gestão de Usuários', key: 'usuarios' });
-        navLinks.push({ href: '/admin/dashboard', icon: '📊', label: 'Painel ADM', key: 'adm' });
+        navLinks.push({ href: '/vps/maturidade', icon: '\uD83D\uDCC8', label: 'Maturidade VPS', key: 'vps' });
+        navLinks.push({ href: '/admin/users', icon: '\uD83D\uDC65', label: 'Gestão de Usuários', key: 'usuarios' });
+        navLinks.push({ href: '/admin/dashboard', icon: '\uD83D\uDCCA', label: 'Painel ADM', key: 'adm' });
     }
 
     const links = navLinks.map(l => `
-        <a href="${l.href}" class="sidebar__link ${activePage === l.key ? 'active' : ''}">
+        <a href="${l.href}" class="sidebar__link ${activePage === l.key ? 'active' : ''}" data-sidebar-link>
             <span class="icon">${l.icon}</span>
             <span>${l.label}</span>
         </a>
     `).join('');
 
     const gamificationBadge = user.foto_perfil
-        ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">👑 Ouro</span>`
-        : `<span class="badge badge--bronze" style="font-size:10px; margin-top:4px;">🥉 Bronze</span>`;
+        ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">\uD83D\uDC51 Ouro</span>`
+        : `<span class="badge badge--bronze" style="font-size:10px; margin-top:4px;">\uD83E\uDD49 Bronze</span>`;
 
     const avatarHtml = user.foto_perfil
         ? `<img src="${user.foto_perfil}" alt="Perfil" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
         : getInitials(user.nome);
+
+    // Injeta o botão hamburguer e overlay no body (se não existirem)
+    if (!document.getElementById('sidebar-toggle')) {
+        const toggle = document.createElement('button');
+        toggle.id = 'sidebar-toggle';
+        toggle.className = 'sidebar-toggle';
+        toggle.setAttribute('aria-label', 'Abrir menu');
+        toggle.innerHTML = '\u2630';
+        document.body.appendChild(toggle);
+    }
+    if (!document.getElementById('sidebar-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'sidebar-overlay';
+        overlay.className = 'sidebar-overlay';
+        document.body.appendChild(overlay);
+    }
 
     return `
         <aside class="sidebar" id="sidebar">
@@ -182,15 +198,18 @@ function buildSidebar(user, activePage) {
                     </div>
                 </div>
                 <button class="btn-logout" id="btn-logout">
-                    <span>🚪</span><span>Sair</span>
+                    <span>\uD83D\uDEAA</span><span>Sair</span>
                 </button>
             </div>
         </aside>
     `;
 }
 
-// Inicia logout e modal de perfil
+// Inicia logout, modal de perfil e toggle do sidebar
 async function initLogout() {
+    // ── Toggle sidebar mobile ──
+    initSidebarToggle();
+
     document.addEventListener('click', async e => {
         if (e.target.closest('#btn-logout')) {
             try {
@@ -208,6 +227,11 @@ async function initLogout() {
                 ensureProfileModal(user);
                 document.getElementById('profile-modal-overlay').classList.add('active');
             }
+        }
+
+        // Fecha sidebar ao clicar em link de navegação (mobile)
+        if (e.target.closest('[data-sidebar-link]') && window.innerWidth <= 768) {
+            closeSidebar();
         }
     });
 
@@ -231,10 +255,10 @@ async function initLogout() {
             if (badgeEl) {
                 if (updatedUser.foto_perfil) {
                     badgeEl.className = 'badge badge--gold';
-                    badgeEl.innerHTML = '👑 Ouro';
+                    badgeEl.innerHTML = '\uD83D\uDC51 Ouro';
                 } else {
                     badgeEl.className = 'badge badge--bronze';
-                    badgeEl.innerHTML = '🥉 Bronze';
+                    badgeEl.innerHTML = '\uD83E\uDD49 Bronze';
                 }
             }
         }
@@ -465,6 +489,40 @@ function updateModalData(user) {
     if (confirmPwdInput) confirmPwdInput.value = '';
 }
 
+// ── Controle do sidebar hambúrguer (mobile) ──
+function initSidebarToggle() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle  = document.getElementById('sidebar-toggle');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar || !toggle) return;
+
+    toggle.addEventListener('click', () => {
+        sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    });
+    if (overlay) overlay.addEventListener('click', closeSidebar);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+}
+
+function openSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggle  = document.getElementById('sidebar-toggle');
+    if (sidebar) sidebar.classList.add('open');
+    if (overlay) overlay.classList.add('active');
+    if (toggle)  toggle.innerHTML = '×';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggle  = document.getElementById('sidebar-toggle');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+    if (toggle)  toggle.innerHTML = '☰';
+    document.body.style.overflow = '';
+}
+
 // Injeta/Garante o Favicon do Capacete (Logo2) em todas as páginas
 (function ensureFavicon() {
     let link = document.querySelector("link[rel*='icon']");
@@ -478,16 +536,19 @@ function updateModalData(user) {
 })();
 
 // Exporta para window
-window.showToast = showToast;
-window.formatDate = formatDate;
-window.formatDateTime = formatDateTime;
-window.daysUntil = daysUntil;
-window.statusBadge = statusBadge;
-window.trainingBadge = trainingBadge;
-window.getInitials = getInitials;
-window.saveSession = saveSession;
-window.getSession = getSession;
-window.clearSession = clearSession;
-window.requireLogin = requireLogin;
-window.buildSidebar = buildSidebar;
-window.initLogout = initLogout;
+window.showToast       = showToast;
+window.formatDate      = formatDate;
+window.formatDateTime  = formatDateTime;
+window.daysUntil       = daysUntil;
+window.statusBadge     = statusBadge;
+window.trainingBadge   = trainingBadge;
+window.getInitials     = getInitials;
+window.saveSession     = saveSession;
+window.getSession      = getSession;
+window.clearSession    = clearSession;
+window.requireLogin    = requireLogin;
+window.buildSidebar    = buildSidebar;
+window.initLogout      = initLogout;
+window.openSidebar     = openSidebar;
+window.closeSidebar    = closeSidebar;
+window.initSidebarToggle = initSidebarToggle;

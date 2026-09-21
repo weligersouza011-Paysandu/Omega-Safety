@@ -1396,3 +1396,79 @@
     margin-bottom: var(--space-md);
     opacity: 0.5;
 }
+
+/* ── Otimização Mobile: Redimensionamento dos Cards de Inspeções ── */
+@media (max-width: 768px) {
+    .caderno-select-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-bottom: var(--space-md);
+    }
+
+    .caderno-select-card {
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+    }
+
+    .caderno-select-card__icon {
+        font-size: 26px;
+        margin-bottom: 4px;
+    }
+
+    .caderno-select-card__title {
+        font-size: var(--font-size-sm);
+        margin-bottom: 2px;
+    }
+
+    .caderno-select-card__info {
+        font-size: var(--font-size-xs);
+    }
+
+    .insp-registros-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .insp-btn-nova {
+        width: 100%;
+    }
+
+    .checklist-container {
+        max-width: 100%;
+    }
+
+    .checklist-header {
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        margin-bottom: 12px;
+    }
+
+    .checklist-question {
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        gap: 10px;
+    }
+
+    .checklist-question__number {
+        width: 26px;
+        height: 26px;
+        font-size: 12px;
+    }
+
+    .checklist-question__text {
+        font-size: 0.875rem;
+        margin-bottom: 6px;
+    }
+
+    .checklist-option {
+        padding: 5px 12px;
+        font-size: 11px;
+    }
+
+    .dash-indicator-card {
+        padding: 10px 12px;
+    }
+}
+
