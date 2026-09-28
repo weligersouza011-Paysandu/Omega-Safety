@@ -1,24 +1,24 @@
 // routes/inspections.js — Inspeções Avulsas (legado) + Respostas de Caderno
 const express = require('express');
 const multer  = require('multer');
-const path    = require('path');
-const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const db      = require('../database/db');
+const { uploadBuffer, removeMedia } = require('../config/cloudinary');
 const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'inspecoes');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Upload em memória → Cloudinary (apenas a URL vai para o banco)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10*1024*1024 } });
 
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename:    (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `insp_${Date.now()}_${uuidv4().slice(0,8)}${ext}`);
-    },
-});
-const upload = multer({ storage, limits: { fileSize: 10*1024*1024 } });
+async function uploadToCloudinary(file, folder) {
+    if (!file) return null;
+    const { secure_url } = await uploadBuffer(file.buffer, {
+        folder,
+        resourceType: 'image',
+        filename: file.originalname,
+    });
+    return secure_url;
+}
 
 function isPrivileged(u) {
     return u && (u.is_master === 1 || u.perfil === 'adm');
@@ -571,31 +571,41 @@ router.post('/respostas', requireAuth, upload.fields([
             return res.status(400).json({ error: 'Local / SS é obrigatório.' });
         }
 
-        const id = uuidv4();
-        const fotPath   = req.files?.foto?.[0]   ? `/uploads/inspecoes/${req.files.foto[0].filename}` : null;
-        const fot2Path  = req.files?.foto_2?.[0]  ? `/uploads/inspecoes/${req.files.foto_2[0].filename}` : null;
-        const fot3Path  = req.files?.foto_3?.[0]  ? `/uploads/inspecoes/${req.files.foto_3[0].filename}` : null;
-
-        if (!fotPath) {
+        if (!req.files?.foto?.[0]) {
             return res.status(400).json({ error: 'A Foto 1 (evidência inicial) é obrigatória.' });
         }
 
+        const id = uuidv4();
         const dataRegistro = data_inspecao || new Date().toISOString().slice(0, 10);
 
-        await db.runAsync(
-            `INSERT INTO caderno_respostas
-             (id, caderno_id, matricula, nome_inspetor, data_inspecao, data_ocorrido,
-              contrato, lideranca, local, subcategoria, categoria, descricao, conclusao_tecnica,
-              respostas_json, observacoes, foto_path, foto_2_path, foto_3_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [id, caderno_id, u.matricula, u.nome,
-             dataRegistro, data_ocorrido || null, contratoFinal,
-             lideranca, local, subcategoria || null, categoria || null, descricao || null,
-             conclusaoFinal,
-             typeof respostas_json === 'string' ? respostas_json : JSON.stringify(respostasObj),
-             observacoes || null,
-             fotPath, fot2Path, fot3Path]
-        );
+        let fotPath = null, fot2Path = null, fot3Path = null;
+        try {
+            fotPath  = await uploadToCloudinary(req.files.foto[0],  'omega-safety/cadernos');
+            fot2Path = await uploadToCloudinary(req.files.foto_2?.[0], 'omega-safety/cadernos');
+            fot3Path = await uploadToCloudinary(req.files.foto_3?.[0], 'omega-safety/cadernos');
+        } catch (upErr) {
+            return res.status(502).json({ error: 'Falha ao enviar a foto para o Cloudinary: ' + upErr.message });
+        }
+
+        try {
+            await db.runAsync(
+                `INSERT INTO caderno_respostas
+                 (id, caderno_id, matricula, nome_inspetor, data_inspecao, data_ocorrido,
+                  contrato, lideranca, local, subcategoria, categoria, descricao, conclusao_tecnica,
+                  respostas_json, observacoes, foto_path, foto_2_path, foto_3_path)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [id, caderno_id, u.matricula, u.nome,
+                 dataRegistro, data_ocorrido || null, contratoFinal,
+                 lideranca, local, subcategoria || null, categoria || null, descricao || null,
+                 conclusaoFinal,
+                 typeof respostas_json === 'string' ? respostas_json : JSON.stringify(respostasObj),
+                 observacoes || null,
+                 fotPath, fot2Path, fot3Path]
+            );
+        } catch (dbErr) {
+            await Promise.all([removeMedia(fotPath), removeMedia(fot2Path), removeMedia(fot3Path)]);
+            throw dbErr;
+        }
 
         res.status(201).json({ id, message: 'Inspeção registrada com sucesso.' });
     } catch(err) {
@@ -609,12 +619,11 @@ router.delete('/respostas/:id', requireAdm, async (req, res) => {
         const row = await db.getAsync('SELECT * FROM caderno_respostas WHERE id = ?', [req.params.id]);
         if (!row) return res.status(404).json({ error: 'Não encontrado.' });
 
-        [row.foto_path, row.foto_2_path, row.foto_3_path].forEach(p => {
-            if (p) {
-                const abs = path.join(__dirname, '..', p);
-                if (fs.existsSync(abs)) fs.unlinkSync(abs);
-            }
-        });
+        await Promise.all([
+            removeMedia(row.foto_path),
+            removeMedia(row.foto_2_path),
+            removeMedia(row.foto_3_path),
+        ]);
 
         await db.runAsync('DELETE FROM caderno_respostas WHERE id = ?', [req.params.id]);
         res.json({ message: 'Inspeção removida.' });
@@ -661,8 +670,14 @@ router.post('/', requireAuth, upload.single('foto'), async (req, res) => {
             placa_veiculo, tag, tipo_veiculo, descricao, conclusao_tecnica,
             card_inspecao, plano_acao, prazo } = req.body;
 
-    const id      = uuidv4();
-    const fotPath = req.file ? `/uploads/inspecoes/${req.file.filename}` : null;
+    const id = uuidv4();
+
+    let fotPath = null;
+    try {
+        fotPath = await uploadToCloudinary(req.file, 'omega-safety/inspecoes');
+    } catch (upErr) {
+        return res.status(502).json({ error: 'Falha ao enviar a foto para o Cloudinary: ' + upErr.message });
+    }
 
     try {
         await db.runAsync(`
@@ -680,6 +695,7 @@ router.post('/', requireAuth, upload.single('foto'), async (req, res) => {
         );
         res.status(201).json({ id, message: 'Inspeção registrada.' });
     } catch(err) {
+        await removeMedia(fotPath);
         res.status(500).json({ error: err.message });
     }
 });

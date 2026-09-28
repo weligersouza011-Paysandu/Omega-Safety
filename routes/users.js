@@ -2,22 +2,16 @@
 const express = require('express');
 const bcrypt  = require('bcryptjs');
 const multer  = require('multer');
-const path    = require('path');
 const db      = require('../database/db');
+const { uploadBuffer, removeMedia } = require('../config/cloudinary');
 const { requireAdm, requireAuth } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
-// Configuração do Multer para foto de perfil
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '..', 'public', 'uploads', 'perfis'));
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `avatar_${req.session.usuario.id}_${Date.now()}${ext}`);
-    }
+// Foto de perfil: upload em memória → Cloudinary
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
 });
-const upload = multer({ storage });
 
 // ── Cadastro em Lote (Operacional) ────────────────────────
 router.post('/batch', requireAdm, async (req, res) => {
@@ -254,14 +248,29 @@ router.post('/me/photo', requireAuth, upload.single('avatar'), async (req, res) 
         return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
     }
     
-    const photoUrl = `/uploads/perfis/${req.file.filename}`;
     const userId = req.session.usuario.id;
+    const pasta = `omega-safety/perfis/avatar_${userId}`;
+
+    let photoUrl;
+    try {
+        const uploaded = await uploadBuffer(req.file.buffer, {
+            folder: pasta,
+            resourceType: 'image',
+            filename: req.file.originalname,
+        });
+        photoUrl = uploaded.secure_url;
+    } catch (upErr) {
+        return res.status(502).json({ error: 'Falha ao enviar a foto para o Cloudinary: ' + upErr.message });
+    }
 
     try {
+        const anterior = await db.getAsync(`SELECT foto_perfil FROM usuarios WHERE id = ?`, [userId]);
         await db.runAsync(`UPDATE usuarios SET foto_perfil = ? WHERE id = ?`, [photoUrl, userId]);
         req.session.usuario.foto_perfil = photoUrl; // Atualiza na sessão também
+        if (anterior && anterior.foto_perfil) await removeMedia(anterior.foto_perfil);
         res.json({ message: 'Foto atualizada com sucesso. Você agora é um Usuário Ouro!', url: photoUrl });
     } catch (err) {
+        await removeMedia(photoUrl);
         res.status(500).json({ error: err.message });
     }
 });

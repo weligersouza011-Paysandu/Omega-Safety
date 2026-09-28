@@ -1,5 +1,6 @@
-// database/db.js — Suporte dual: PostgreSQL (Render/Produção) / SQLite (Desenvolvimento Local)
+// database/db.js — Suporte dual: PostgreSQL (Neon/Produção) / SQLite (Desenvolvimento Local)
 const path   = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const fs     = require('fs');
 const bcrypt = require('bcryptjs');
 
@@ -358,6 +359,32 @@ async function initDB() {
     }
 }
 
-initDB().catch(err => { console.error('[DB] Falha na inicialização:', err); process.exit(1); });
+// Inicialização com retry: uma falha transitória do Neon não pode derrubar o serviço
+let schemaPronto = false;
+
+async function tentarInit() {
+    if (schemaPronto) return true;
+    await initDB();
+    schemaPronto = true;
+    return true;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+(async function boot() {
+    for (let tentativa = 1; tentativa <= 5; tentativa++) {
+        try {
+            await tentarInit();
+            return;
+        } catch (err) {
+            console.error(`[DB] Falha na inicialização (tentativa ${tentativa}/5):`, err.message);
+            if (tentativa < 5) await sleep(3000 * tentativa);
+        }
+    }
+    console.error('[DB] Schema ainda não inicializado — nova tentativa em 60s. /api/health reportará "degraded".');
+    setInterval(async () => {
+        try { await tentarInit(); } catch (err) { console.error('[DB] Retry automático falhou:', err.message); }
+    }, 60000);
+})();
 
 module.exports = db;

@@ -4,29 +4,23 @@ const db = require('../database/db');
 const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
 const crypto = require('crypto');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { uploadBuffer, removeMedia } = require('../config/cloudinary');
 
-// Configuração do Multer para uploads de imagens do VPS
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../uploads/vps');
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, 'vps-' + uniqueSuffix + ext);
-    }
-});
-
+// Upload em memória → Cloudinary (apenas a URL vai para o banco)
 const upload = multer({
-    storage: storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
+
+async function uploadToCloudinary(file, folder, resourceType = 'image') {
+    if (!file) return null;
+    const { secure_url } = await uploadBuffer(file.buffer, {
+        folder,
+        resourceType,
+        filename: file.originalname,
+    });
+    return secure_url;
+}
 
 // Função auxiliar para calcular o status acumulado dos cards do canteiro
 function calcularStatusCardCanteiro(historyList) {
@@ -284,22 +278,27 @@ router.post('/canteiros', requireAdm, upload.fields([{ name: 'capa_1', maxCount:
         const id = crypto.randomUUID();
         const maturidade = (maturidade_inicial !== undefined && maturidade_inicial !== '') ? parseInt(maturidade_inicial, 10) : 1;
         const finalContrato = contrato ? contrato.trim() : null;
-        
+
         let capa1Path = null;
         let capa2Path = null;
-        
-        if (req.files && req.files.capa_1) {
-            capa1Path = `/uploads/vps/${req.files.capa_1[0].filename}`;
+
+        try {
+            capa1Path = await uploadToCloudinary(req.files?.capa_1?.[0], 'omega-safety/vps');
+            capa2Path = await uploadToCloudinary(req.files?.capa_2?.[0], 'omega-safety/vps');
+        } catch (upErr) {
+            return res.status(502).json({ error: 'Falha ao enviar a capa para o Cloudinary: ' + upErr.message });
         }
-        if (req.files && req.files.capa_2) {
-            capa2Path = `/uploads/vps/${req.files.capa_2[0].filename}`;
+
+        try {
+            await db.runAsync(
+                'INSERT INTO vps_canteiros (id, nome, contrato, status, maturidade, capa_1_path, capa_2_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [id, nome, finalContrato, status || 'Em andamento', maturidade, capa1Path, capa2Path]
+            );
+        } catch (dbErr) {
+            await Promise.all([removeMedia(capa1Path), removeMedia(capa2Path)]);
+            throw dbErr;
         }
-        
-        await db.runAsync(
-            'INSERT INTO vps_canteiros (id, nome, contrato, status, maturidade, capa_1_path, capa_2_path) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [id, nome, finalContrato, status || 'Em andamento', maturidade, capa1Path, capa2Path]
-        );
-        
+
         res.status(201).json({ message: 'Canteiro cadastrado com sucesso!', id });
     } catch (err) {
         console.error('[VPS] Erro ao cadastrar canteiro:', err);
@@ -326,14 +325,25 @@ router.put('/canteiros/:id', requireAdm, upload.fields([{ name: 'capa_1', maxCou
             params.push(parseInt(maturidade, 10));
         }
 
-        if (req.files && req.files.capa_1) {
-            updates.push('capa_1_path = ?');
-            params.push(`/uploads/vps/${req.files.capa_1[0].filename}`);
+        let capa1Url = null, capa2Url = null;
+        const temCapa1 = !!(req.files && req.files.capa_1);
+        const temCapa2 = !!(req.files && req.files.capa_2);
+
+        if (temCapa1 || temCapa2) {
+            try {
+                if (temCapa1) capa1Url = await uploadToCloudinary(req.files.capa_1[0], 'omega-safety/vps');
+                if (temCapa2) capa2Url = await uploadToCloudinary(req.files.capa_2[0], 'omega-safety/vps');
+            } catch (upErr) {
+                return res.status(502).json({ error: 'Falha ao enviar a capa para o Cloudinary: ' + upErr.message });
+            }
         }
-        if (req.files && req.files.capa_2) {
-            updates.push('capa_2_path = ?');
-            params.push(`/uploads/vps/${req.files.capa_2[0].filename}`);
-        }
+
+        const anterior = (temCapa1 || temCapa2)
+            ? await db.getAsync('SELECT capa_1_path, capa_2_path FROM vps_canteiros WHERE id = ?', [id])
+            : null;
+
+        if (temCapa1) { updates.push('capa_1_path = ?'); params.push(capa1Url); }
+        if (temCapa2) { updates.push('capa_2_path = ?'); params.push(capa2Url); }
 
         params.push(id);
         
@@ -341,7 +351,12 @@ router.put('/canteiros/:id', requireAdm, upload.fields([{ name: 'capa_1', maxCou
             `UPDATE vps_canteiros SET ${updates.join(', ')} WHERE id = ?`,
             params
         );
-        
+
+        if (anterior) {
+            if (temCapa1 && anterior.capa_1_path) await removeMedia(anterior.capa_1_path);
+            if (temCapa2 && anterior.capa_2_path) await removeMedia(anterior.capa_2_path);
+        }
+
         res.json({ message: 'Canteiro atualizado com sucesso!' });
     } catch (err) {
         console.error('[VPS] Erro ao atualizar canteiro:', err);
@@ -407,21 +422,29 @@ router.post('/historico', requireAdm, upload.fields([
         const criado_por = req.session.usuario.matricula;
         
         let evi1 = null, evi2 = null, anexo = null;
-        
-        if (req.files) {
-            if (req.files.evidencia_1) evi1 = `/uploads/vps/${req.files.evidencia_1[0].filename}`;
-            if (req.files.evidencia_2) evi2 = `/uploads/vps/${req.files.evidencia_2[0].filename}`;
-            if (req.files.anexo) anexo = `/uploads/vps/${req.files.anexo[0].filename}`;
+
+        try {
+            if (req.files?.evidencia_1?.[0]) evi1 = await uploadToCloudinary(req.files.evidencia_1[0], 'omega-safety/vps');
+            if (req.files?.evidencia_2?.[0]) evi2 = await uploadToCloudinary(req.files.evidencia_2[0], 'omega-safety/vps');
+            // O anexo pode ser PDF/documento → resource_type auto
+            if (req.files?.anexo?.[0]) anexo = await uploadToCloudinary(req.files.anexo[0], 'omega-safety/vps', 'auto');
+        } catch (upErr) {
+            return res.status(502).json({ error: 'Falha ao enviar o arquivo para o Cloudinary: ' + upErr.message });
         }
-        
+
         const finalTipoCard = (categoria === 'Mudança de Maturidade') ? 'N/A' : tipo_card;
 
-        await db.runAsync(
-            `INSERT INTO vps_historico (id, canteiro_id, id_inspecao, data_registro, categoria, tipo_card, descricao, 
-             evidencia_1_path, evidencia_2_path, anexo_path, criado_por) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, canteiro_id, id_inspecao, data_registro, categoria, finalTipoCard, descricao, evi1, evi2, anexo, criado_por]
-        );
+        try {
+            await db.runAsync(
+                `INSERT INTO vps_historico (id, canteiro_id, id_inspecao, data_registro, categoria, tipo_card, descricao, 
+                 evidencia_1_path, evidencia_2_path, anexo_path, criado_por) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [id, canteiro_id, id_inspecao, data_registro, categoria, finalTipoCard, descricao, evi1, evi2, anexo, criado_por]
+            );
+        } catch (dbErr) {
+            await Promise.all([removeMedia(evi1), removeMedia(evi2), removeMedia(anexo)]);
+            throw dbErr;
+        }
 
         if (categoria === 'Mudança de Maturidade' && novo_nivel_maturidade) {
             await db.runAsync('UPDATE vps_canteiros SET maturidade = ? WHERE id = ?', [parseInt(novo_nivel_maturidade, 10), canteiro_id]);
@@ -438,8 +461,20 @@ router.post('/historico', requireAdm, upload.fields([
 router.delete('/historico/:id', requireAdm, async (req, res) => {
     try {
         const { id } = req.params;
+        const alvo = await db.getAsync(
+            'SELECT evidencia_1_path, evidencia_2_path, evidencia_3_path, anexo_path FROM vps_historico WHERE id = ?',
+            [id]
+        );
         await db.runAsync('DELETE FROM vps_historico WHERE id = ?', [id]);
         await db.runAsync('DELETE FROM vps_pendencias WHERE historico_id = ?', [id]);
+        if (alvo) {
+            await Promise.all([
+                removeMedia(alvo.evidencia_1_path),
+                removeMedia(alvo.evidencia_2_path),
+                removeMedia(alvo.evidencia_3_path),
+                removeMedia(alvo.anexo_path),
+            ]);
+        }
         res.json({ message: 'Registro de histórico excluído com sucesso!' });
     } catch (err) {
         console.error('[VPS] Erro ao excluir registro do histórico:', err);

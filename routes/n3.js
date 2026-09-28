@@ -2,23 +2,14 @@
 const express = require('express');
 const multer  = require('multer');
 const path    = require('path');
-const fs      = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const db      = require('../database/db');
+const { uploadBuffer, removeMedia } = require('../config/cloudinary');
 const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
-// ── Multer ──────────────────────────────────────
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads', 'n3');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename:    (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `n3_${Date.now()}_${uuidv4().slice(0,8)}${ext}`);
-    },
-});
+// ── Multer (memória) + Cloudinary ───────────────
+const storage = multer.memoryStorage();
 const upload = multer({
     storage,
     limits: { fileSize: 10 * 1024 * 1024 },
@@ -27,6 +18,16 @@ const upload = multer({
         ok ? cb(null, true) : cb(new Error('Apenas imagens.'));
     },
 });
+
+async function uploadToCloudinary(file, folder) {
+    if (!file) return null;
+    const { secure_url } = await uploadBuffer(file.buffer, {
+        folder,
+        resourceType: 'image',
+        filename: file.originalname,
+    });
+    return secure_url;
+}
 
 // GET /api/n3/contratos — lista contratos distintos com registros N3
 router.get('/contratos', requireAuth, async (req, res) => {
@@ -166,14 +167,20 @@ router.post('/', requireAuth, upload.fields([
         return res.status(400).json({ error: 'A TAG deve conter apenas letras e números.' });
 
     const id  = uuidv4();
-    const ev1 = req.files?.evidencia_1?.[0] ? `/uploads/n3/${req.files.evidencia_1[0].filename}` : null;
-    const ev2 = req.files?.evidencia_2?.[0] ? `/uploads/n3/${req.files.evidencia_2[0].filename}` : null;
 
     // Data do registro: hoje (obrigatório)
     const dataRegistro = data || new Date().toISOString().slice(0,10);
     
     // Nível padrão: Em Análise
     const nivelFinal = nivel || 'Em Análise';
+
+    let ev1 = null, ev2 = null;
+    try {
+        ev1 = await uploadToCloudinary(req.files?.evidencia_1?.[0], 'omega-safety/n3');
+        ev2 = await uploadToCloudinary(req.files?.evidencia_2?.[0], 'omega-safety/n3');
+    } catch (err) {
+        return res.status(502).json({ error: 'Falha ao enviar a evidência para o Cloudinary: ' + err.message });
+    }
 
     try {
         await db.runAsync(`
@@ -191,6 +198,7 @@ router.post('/', requireAuth, upload.fields([
         );
         res.status(201).json({ id, message: 'N3 registrado com status "Em Análise".' });
     } catch(err) {
+        await Promise.all([removeMedia(ev1), removeMedia(ev2)]);
         res.status(500).json({ error: err.message });
     }
 });
@@ -244,12 +252,7 @@ router.delete('/:id', requireAdm, async (req, res) => {
         const row = await db.getAsync('SELECT * FROM n3_registros WHERE id = ?', [req.params.id]);
         if (!row) return res.status(404).json({ error: 'Não encontrado.' });
 
-        [row.evidencia_1_path, row.evidencia_2_path].forEach(p => {
-            if (p) {
-                const abs = path.join(__dirname, '..', p);
-                if (fs.existsSync(abs)) fs.unlinkSync(abs);
-            }
-        });
+        await Promise.all([removeMedia(row.evidencia_1_path), removeMedia(row.evidencia_2_path)]);
         await db.runAsync('DELETE FROM n3_registros WHERE id = ?', [req.params.id]);
         res.json({ message: 'N3 removido.' });
     } catch(err) {

@@ -10,6 +10,9 @@ const cors         = require('cors');
 
 const app = express();
 
+// Necessário atrás do proxy do Render (HTTPS terminado no proxy)
+app.set('trust proxy', 1);
+
 // ────────────────────────────────────────────────
 //  Middlewares globais
 // ────────────────────────────────────────────────
@@ -45,14 +48,18 @@ if (process.env.DATABASE_URL) {
     console.log('[SESSION] Conector SQLite local para sessões ativado.');
 }
 
+const isProd = process.env.NODE_ENV === 'production';
+
 app.use(session({
     store: sessionStore,
     secret: process.env.SESSION_SECRET || 'omega_safety_secret',
     resave: false,
     saveUninitialized: false,
+    proxy: isProd,
     cookie: {
-        secure: false, // true em produção se HTTPS estrito
+        secure: isProd, // true em produção (Render entrega via HTTPS)
         httpOnly: true,
+        sameSite: 'lax',
         maxAge: 8 * 60 * 60 * 1000, // 8 horas
     },
 }));
@@ -71,6 +78,51 @@ app.use('/api', (req, res, next) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
     next();
+});
+
+// ────────────────────────────────────────────────
+//  Healthcheck (Render) — validação de Neon + Cloudinary
+// ────────────────────────────────────────────────
+const db = require('./database/db');
+const { pingCloudinary, isConfigured: cloudinaryConfigured } = require('./config/cloudinary');
+
+let cloudCache = { at: 0, value: null };
+
+function withTimeout(promise, ms, label) {
+    return Promise.race([
+        promise,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout (${ms}ms)`)), ms)),
+    ]);
+}
+
+app.get('/api/health', async (req, res) => {
+    const t0 = Date.now();
+    let database = 'ok', dbError = null;
+
+    try {
+        await withTimeout(db.getAsync('SELECT 1 AS ok'), 5000, 'database');
+    } catch (err) {
+        database = 'error';
+        dbError = err.message;
+    }
+
+    let cloud = cloudCache.value;
+    if (!cloud || Date.now() - cloudCache.at > 60000) {
+        cloud = await pingCloudinary(5000);
+        cloudCache = { at: Date.now(), value: cloud };
+    }
+
+    const status = database === 'ok' && cloud.ok ? 200 : 503;
+    res.status(status).json({
+        status: status === 200 ? 'ok' : 'degraded',
+        service: 'omega-safety-api',
+        uptime: Math.round(process.uptime()),
+        latency_ms: Date.now() - t0,
+        database: { engine: 'postgresql-neon', state: database, error: dbError },
+        media: { provider: 'cloudinary', cloud: process.env.CLOUDINARY_CLOUD_NAME || null, state: cloud.ok ? 'ok' : cloud.detail },
+        env: { node: process.version, node_env: process.env.NODE_ENV || 'development' },
+        timestamp: new Date().toISOString(),
+    });
 });
 
 // ────────────────────────────────────────────────
@@ -111,8 +163,43 @@ app.get('*', (req, res) => {
 //  Inicialização
 // ────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🟢 Omega Safety rodando em http://localhost:${PORT}`);
     console.log(`   Acesso na rede: http://<seu-ip>:${PORT}`);
-    console.log(`   ADM padrão: matrícula 1998 / senha 1234\n`);
+    console.log(`   ADM padrão: matrícula 1998 / senha 1234`);
+    console.log(`   Healthcheck: http://localhost:${PORT}/api/health\n`);
 });
+
+// Evita desconexões do balanceador do Render (idle timeout ~60s)
+server.keepAliveTimeout  = 65 * 1000;
+server.headersTimeout    = 66 * 1000;
+server.requestTimeout    = 120 * 1000;
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`[SERVER] Porta ${PORT} já em uso. Defina outra em .env (PORT=...).`);
+        process.exit(1);
+    }
+    console.error('[SERVER] Erro no servidor:', err);
+});
+
+// Um erro assíncrono não derruba o serviço em silêncio: loga e mantém no ar.
+process.on('unhandledRejection', (reason) => {
+    console.error('[SERVER] unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[SERVER] uncaughtException:', err);
+});
+
+// Encerramento gracioso (Render envia SIGTERM em deploy)
+const encerrar = (sinal) => () => {
+    console.log(`\n[SERVER] ${sinal} recebido — encerrando com elegância...`);
+    server.close(() => {
+        const pool = db.pool;
+        if (pool) pool.end().catch(() => {});
+        process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 10000).unref();
+};
+process.on('SIGTERM', encerrar('SIGTERM'));
+process.on('SIGINT',  encerrar('SIGINT'));
