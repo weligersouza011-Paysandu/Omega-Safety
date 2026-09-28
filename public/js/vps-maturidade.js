@@ -19,10 +19,13 @@ const pendenciasEmEdicao = new Set();
 
 function formatarDataExibicao(dataStr) {
     if (!dataStr) return '-';
-    const parts = String(dataStr).split('-');
-    if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
+    const raw = String(dataStr).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (br) return `${br[1]}/${br[2]}/${br[3]}`;
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
     return dataStr;
 }
 

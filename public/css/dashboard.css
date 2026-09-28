@@ -97,6 +97,124 @@
     transform:  scale(1.1);
 }
 
+/* ── Logo abaixo da saudação ── */
+.welcome-brand {
+    display:     flex;
+    align-items: center;
+    margin-top:  var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.welcome-brand__logo {
+    height:  56px;
+    width:   auto;
+    display: block;
+    filter:  drop-shadow(0 6px 18px rgba(139, 28, 49, 0.35));
+}
+
+/* ── Botões principais (primeiro plano) ── */
+.module-grid--primary {
+    display:      flex;
+    flex-wrap:    wrap;
+    gap:          var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.module-grid--primary .module-card {
+    flex:        1 1 240px;
+    height:      210px;
+    border-color: rgba(139, 28, 49, 0.35);
+    box-shadow:  var(--shadow-sm);
+}
+
+.module-grid--secondary {
+    grid-template-columns: 1fr;
+    margin-bottom: var(--space-xl);
+}
+
+/* Fundos dos cartões (não há imagens em /img — usamos gradientes) */
+.module-card--inspecoes .module-card__bg {
+    background-color: #1a1a1a;
+    background-image: linear-gradient(150deg, #161616 0%, #2d1219 55%, #8B1C31 175%);
+}
+.module-card--matriz .module-card__bg {
+    background-color: #1a1a1a;
+    background-image: linear-gradient(150deg, #161616 0%, #12222b 55%, #1f6f8b 175%);
+}
+.module-card--treinamentos .module-card__bg {
+    background-color: #1a1a1a;
+    background-image: linear-gradient(150deg, #161616 0%, #2a2213 55%, #8a6a1f 175%);
+}
+
+.module-card--inspecoes .module-card__title::after,
+.module-card--matriz .module-card__title::after,
+.module-card--treinamentos .module-card__title::after {
+    content:   '';
+    display:   block;
+    width:     42px;
+    height:    3px;
+    margin-top: var(--space-sm);
+    border-radius: 3px;
+    background: var(--color-red-primary);
+}
+
+.module-card--matriz .module-card__title::after     { background: #2b8fb5; }
+.module-card--treinamentos .module-card__title::after { background: #c69a3a; }
+
+/* ── Cartão compacto (acesso secundário: N3) ── */
+.module-grid .module-card--compact {
+    height:        auto;
+    min-height:    76px;
+    display:       flex;
+    align-items:   center;
+    gap:           var(--space-md);
+    padding:       var(--space-md) var(--space-lg);
+    background:    var(--color-bg-card);
+    border-color:  var(--color-border);
+    box-shadow:    none;
+}
+
+.module-grid .module-card--compact:hover {
+    background:       var(--color-bg-hover);
+    transform:        translateY(-2px);
+    box-shadow:       var(--shadow-md);
+    border-color:     var(--color-red-border);
+}
+
+.module-card--compact .module-card__icon {
+    font-size: 1.5rem;
+    margin:    0;
+}
+
+.module-card--compact .module-card__body {
+    display:        flex;
+    flex-direction: column;
+    gap:            2px;
+    flex:           1;
+    min-width:      0;
+}
+
+.module-card--compact .module-card__title {
+    font-size:   var(--font-size-base);
+    font-weight: 700;
+    color:       #fff;
+    line-height: 1.2;
+}
+
+.module-card--compact .module-card__title::after { content: none; }
+
+.module-card--compact .module-card__desc {
+    margin-top: 0;
+    font-size:  var(--font-size-xs);
+    color:      var(--color-text-muted);
+}
+
+.module-card--compact .module-card__arrow {
+    position:   static;
+    flex-shrink: 0;
+}
+
+
 /* ── Painel de Treinamentos ── */
 .trainings-panel {
     background:    var(--color-bg-card);
@@ -242,6 +360,28 @@
     opacity:   0.08;
 }
 
+/* ── Bloco de Estatísticas (logo abaixo dos botões principais) ── */
+.stats-block {
+    background:    var(--color-bg-card);
+    border:        1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding:       var(--space-lg);
+    margin-bottom: var(--space-xl);
+}
+
+.stats-block__title {
+    font-size:      var(--font-size-base);
+    font-weight:    700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color:          var(--color-text-secondary);
+    margin-bottom:  var(--space-md);
+}
+
+.stats-block .collab-stats { margin-bottom: var(--space-md); }
+.stats-block .stats-grid   { margin-bottom: 0; }
+
+
 /* ── Seção de Boas Vindas ── */
 .welcome-section {
     margin-bottom: var(--space-xl);
@@ -349,4 +489,11 @@
         gap: var(--space-md);
     }
     .module-card { height: 160px; }
+
+    /* Botões principais destacados no mobile */
+    .module-grid--primary .module-card { height: 176px; }
+    .welcome-brand { margin-top: var(--space-sm); margin-bottom: var(--space-md); }
+    .welcome-brand__logo { height: 44px; }
+    .stats-block { padding: var(--space-md); border-radius: var(--radius-lg); }
+    .module-grid .module-card--compact { min-height: 68px; padding: var(--space-sm) var(--space-md); }
 }

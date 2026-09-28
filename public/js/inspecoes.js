@@ -3169,11 +3169,14 @@ function esc(str) {
 function formatBrDate(value) {
     if (!value) return '—';
     try {
-        let dateStr = String(value).trim();
-        if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0];
-        const parts = dateStr.split('-');
-        if (parts.length !== 3) return dateStr;
-        return parts[2] + '/' + parts[1] + '/' + parts[0];
+        const raw = String(value).trim();
+        const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+        const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (br) return `${br[1]}/${br[2]}/${br[3]}`;
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
+        return raw;
     } catch (_) {
         return '—';
     }

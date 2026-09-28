@@ -37,6 +37,13 @@
     border-bottom: 3px solid var(--color-red-primary);
 }
 
+/* Aba/etiqueta "Registros / Rotina" — texto branco p/ contraste no fundo escuro */
+#tab-btn-registros,
+#tab-btn-registros:hover,
+#tab-btn-registros.active {
+    color: #ffffff;
+}
+
 .n3-tab-content {
     display:   none;
     animation: n3FadeIn 0.3s ease;

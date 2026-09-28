@@ -37,58 +37,15 @@
                 <div class="welcome-date" id="today-date"></div>
             </div>
 
-            <!-- Stats Pessoais do Colaborador (todos os perfis) -->
-            <div class="collab-stats" id="collab-stats">
-                <div class="collab-stat-card" id="cs-inspecoes">
-                    <div class="collab-stat-card__icon">🔍</div>
-                    <div class="collab-stat-card__value" id="cs-val-inspecoes">—</div>
-                    <div class="collab-stat-card__label">Minhas Inspeções</div>
-                </div>
-                <div class="collab-stat-card" id="cs-n3">
-                    <div class="collab-stat-card__icon">⚠️</div>
-                    <div class="collab-stat-card__value" id="cs-val-n3">—</div>
-                    <div class="collab-stat-card__label">NIs Registradas</div>
-                </div>
-                <div class="collab-stat-card" id="cs-trein">
-                    <div class="collab-stat-card__icon">📋</div>
-                    <div class="collab-stat-card__value" id="cs-val-trein">—</div>
-                    <div class="collab-stat-card__label">Treinamentos</div>
-                </div>
-                <div class="collab-stat-card collab-stat-card--soon">
-                    <div class="collab-stat-card__icon">🔧</div>
-                    <div class="collab-stat-card__value" style="font-size:0.75rem;opacity:0.5;">Em breve</div>
-                    <div class="collab-stat-card__label">Kaizens</div>
-                </div>
+            <!-- Logo -->
+            <div class="welcome-brand">
+                <img src="/Logo/logo.png" alt="Omega Safety" class="welcome-brand__logo" width="220" height="56">
             </div>
 
-            <!-- Stats ADM (visível apenas para ADM) -->
-            <div id="stats-section" class="stats-grid hidden">
-                <div class="stat-card">
-                    <div class="stat-card__value" id="stat-n3-analise">—</div>
-                    <div class="stat-card__label">N3 em Análise</div>
-                    <div class="stat-card__icon">⚠️</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card__value" id="stat-trein-vencidos">—</div>
-                    <div class="stat-card__label">Trein. Vencidos</div>
-                    <div class="stat-card__icon">📋</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card__value" id="stat-trein-alerta">—</div>
-                    <div class="stat-card__label">Vencem em 30d</div>
-                    <div class="stat-card__icon">⏰</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card__value" id="stat-inspecoes">—</div>
-                    <div class="stat-card__label">Inspeções Hoje</div>
-                    <div class="stat-card__icon">🔍</div>
-                </div>
-            </div>
-
-            <!-- Módulos de Acesso Rápido -->
-            <div class="module-grid">
-                <a href="/inspecoes" class="module-card" id="card-inspecoes" aria-label="Ir para Inspeções Avulsas">
-                    <div class="module-card__bg" style="background-image: url('/img/inspecao-bg.jpg'); background-color: #1a1a1a;"></div>
+            <!-- Botões principais (primeiro plano) -->
+            <nav class="module-grid module-grid--primary" aria-label="Módulos principais">
+                <a href="/inspecoes" class="module-card module-card--inspecoes" id="card-inspecoes" aria-label="Ir para Inspeções Avulsas">
+                    <div class="module-card__bg"></div>
                     <div class="module-card__overlay"></div>
                     <div class="module-card__arrow">→</div>
                     <div class="module-card__content">
@@ -98,17 +55,93 @@
                     </div>
                 </a>
 
-                <a href="/n3" class="module-card" id="card-n3" aria-label="Ir para módulo N3">
-                    <div class="module-card__bg" style="background-image: url('/img/n3-bg.jpg'); background-color: #1a1a1a;"></div>
+                <a href="/vps/maturidade" class="module-card module-card--matriz" id="card-matriz" aria-label="Ir para a Matriz de Maturidade VPS">
+                    <div class="module-card__bg"></div>
                     <div class="module-card__overlay"></div>
                     <div class="module-card__arrow">→</div>
                     <div class="module-card__content">
-                        <span class="module-card__icon">⚠️</span>
-                        <div class="module-card__title">N3</div>
-                        <div class="module-card__desc">Quase Acidentes e Condições Inseguras</div>
+                        <span class="module-card__icon">📈</span>
+                        <div class="module-card__title">Matriz</div>
+                        <div class="module-card__desc">Matriz de Maturidade VPS</div>
                     </div>
                 </a>
-            </div>
+
+                <a href="/treinamentos" class="module-card module-card--treinamentos" id="card-treinamentos" aria-label="Ir para Meus Treinamentos">
+                    <div class="module-card__bg"></div>
+                    <div class="module-card__overlay"></div>
+                    <div class="module-card__arrow">→</div>
+                    <div class="module-card__content">
+                        <span class="module-card__icon">📋</span>
+                        <div class="module-card__title">Meus Treinamentos</div>
+                        <div class="module-card__desc">Vencimentos, alertas e certificações</div>
+                    </div>
+                </a>
+            </nav>
+
+            <!-- Estatísticas -->
+            <section class="stats-block" aria-label="Estatísticas do sistema">
+                <h2 class="stats-block__title">📊 Estatísticas</h2>
+
+                <!-- Stats Pessoais do Colaborador (todos os perfis) -->
+                <div class="collab-stats" id="collab-stats">
+                    <div class="collab-stat-card" id="cs-inspecoes">
+                        <div class="collab-stat-card__icon">🔍</div>
+                        <div class="collab-stat-card__value" id="cs-val-inspecoes">—</div>
+                        <div class="collab-stat-card__label">Minhas Inspeções</div>
+                    </div>
+                    <div class="collab-stat-card" id="cs-n3">
+                        <div class="collab-stat-card__icon">⚠️</div>
+                        <div class="collab-stat-card__value" id="cs-val-n3">—</div>
+                        <div class="collab-stat-card__label">NIs Registradas</div>
+                    </div>
+                    <div class="collab-stat-card" id="cs-trein">
+                        <div class="collab-stat-card__icon">📋</div>
+                        <div class="collab-stat-card__value" id="cs-val-trein">—</div>
+                        <div class="collab-stat-card__label">Treinamentos</div>
+                    </div>
+                    <div class="collab-stat-card collab-stat-card--soon">
+                        <div class="collab-stat-card__icon">🔧</div>
+                        <div class="collab-stat-card__value" style="font-size:0.75rem;opacity:0.5;">Em breve</div>
+                        <div class="collab-stat-card__label">Kaizens</div>
+                    </div>
+                </div>
+
+                <!-- Stats ADM (visível apenas para ADM) -->
+                <div id="stats-section" class="stats-grid hidden">
+                    <div class="stat-card">
+                        <div class="stat-card__value" id="stat-n3-analise">—</div>
+                        <div class="stat-card__label">N3 em Análise</div>
+                        <div class="stat-card__icon">⚠️</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card__value" id="stat-trein-vencidos">—</div>
+                        <div class="stat-card__label">Trein. Vencidos</div>
+                        <div class="stat-card__icon">📋</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card__value" id="stat-trein-alerta">—</div>
+                        <div class="stat-card__label">Vencem em 30d</div>
+                        <div class="stat-card__icon">⏰</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card__value" id="stat-inspecoes">—</div>
+                        <div class="stat-card__label">Inspeções Hoje</div>
+                        <div class="stat-card__icon">🔍</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Acesso secundário -->
+            <nav class="module-grid module-grid--secondary" aria-label="Acesso secundário">
+                <a href="/n3" class="module-card module-card--compact" id="card-n3" aria-label="Ir para módulo N3">
+                    <span class="module-card__icon">⚠️</span>
+                    <span class="module-card__body">
+                        <span class="module-card__title">N3</span>
+                        <span class="module-card__desc">Quase Acidentes e Condições Inseguras</span>
+                    </span>
+                    <span class="module-card__arrow">→</span>
+                </a>
+            </nav>
 
             <!-- Painel de Treinamentos -->
             <div class="trainings-panel">

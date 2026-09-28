@@ -25,9 +25,21 @@ function showToast(message, type = 'success', duration = 4000) {
 }
 
 // ── Formatação de Data ────────────────────────────────
+// Aceita 'YYYY-MM-DD', ISO completo ('YYYY-MM-DDTHH:mm:ss.sssZ')
+// e 'DD/MM/YYYY' — sempre devolvendo dd/mm/aaaa.
+function isoDateParts(value) {
+    const m = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? { y: m[1], m: m[2], d: m[3] } : null;
+}
+
 function formatDate(dateStr) {
     if (!dateStr) return '—';
-    const d = new Date(dateStr + 'T00:00:00');
+    const raw = String(dateStr).trim();
+    const iso = isoDateParts(raw);
+    if (iso) return `${iso.d}/${iso.m}/${iso.y}`;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) return raw;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('pt-BR');
 }
 
@@ -40,8 +52,10 @@ function formatDateTime(dtStr) {
 // Retorna quantos dias faltam para o vencimento (negativo = vencido)
 function daysUntil(dateStr) {
     if (!dateStr) return null;
+    const iso = isoDateParts(dateStr);
+    if (!iso) return null;
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const alvo = new Date(dateStr + 'T00:00:00');
+    const alvo = new Date(Number(iso.y), Number(iso.m) - 1, Number(iso.d));
     return Math.round((alvo - hoje) / (1000 * 60 * 60 * 24));
 }
 
