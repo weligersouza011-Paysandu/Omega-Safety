@@ -55,28 +55,42 @@
                     </div>
                 </a>
 
-                <a href="/vps/maturidade" class="module-card module-card--matriz" id="card-matriz" aria-label="Ir para a Matriz de Maturidade VPS">
+                <a href="/n3" class="module-card module-card--n3" id="card-n3" aria-label="Ir para módulo N3">
                     <div class="module-card__bg"></div>
                     <div class="module-card__overlay"></div>
                     <div class="module-card__arrow">→</div>
                     <div class="module-card__content">
-                        <span class="module-card__icon">📈</span>
-                        <div class="module-card__title">Matriz</div>
-                        <div class="module-card__desc">Matriz de Maturidade VPS</div>
-                    </div>
-                </a>
-
-                <a href="/treinamentos" class="module-card module-card--treinamentos" id="card-treinamentos" aria-label="Ir para Meus Treinamentos">
-                    <div class="module-card__bg"></div>
-                    <div class="module-card__overlay"></div>
-                    <div class="module-card__arrow">→</div>
-                    <div class="module-card__content">
-                        <span class="module-card__icon">📋</span>
-                        <div class="module-card__title">Meus Treinamentos</div>
-                        <div class="module-card__desc">Vencimentos, alertas e certificações</div>
+                        <span class="module-card__icon">⚠️</span>
+                        <div class="module-card__title">N3</div>
+                        <div class="module-card__desc">Quase Acidentes e Condições Inseguras</div>
                     </div>
                 </a>
             </nav>
+
+            <!-- Listagem de Treinamentos do utilizador -->
+            <div class="trainings-panel">
+                <div class="trainings-panel__header">
+                    <div class="trainings-panel__title">
+                        <span class="icon">📋</span>
+                        <span>Meus Treinamentos</span>
+                    </div>
+                    <span class="trainings-count" id="trainings-count">0</span>
+                </div>
+
+                <!-- Cabeçalho da tabela -->
+                <div class="training-header">
+                    <span>Treinamento</span>
+                    <span>Situação</span>
+                    <span style="text-align:right">Vencimento</span>
+                </div>
+
+                <div class="trainings-panel__body" id="trainings-body">
+                    <div class="empty-state">
+                        <div class="empty-state__icon">⏳</div>
+                        <div class="empty-state__title">Carregando treinamentos...</div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Estatísticas -->
             <section class="stats-block" aria-label="Estatísticas do sistema">
@@ -130,43 +144,6 @@
                     </div>
                 </div>
             </section>
-
-            <!-- Acesso secundário -->
-            <nav class="module-grid module-grid--secondary" aria-label="Acesso secundário">
-                <a href="/n3" class="module-card module-card--compact" id="card-n3" aria-label="Ir para módulo N3">
-                    <span class="module-card__icon">⚠️</span>
-                    <span class="module-card__body">
-                        <span class="module-card__title">N3</span>
-                        <span class="module-card__desc">Quase Acidentes e Condições Inseguras</span>
-                    </span>
-                    <span class="module-card__arrow">→</span>
-                </a>
-            </nav>
-
-            <!-- Painel de Treinamentos -->
-            <div class="trainings-panel">
-                <div class="trainings-panel__header">
-                    <div class="trainings-panel__title">
-                        <span class="icon">📋</span>
-                        <span>Meus Treinamentos</span>
-                    </div>
-                    <span class="trainings-count" id="trainings-count">0</span>
-                </div>
-
-                <!-- Cabeçalho da tabela -->
-                <div class="training-header">
-                    <span>Treinamento</span>
-                    <span>Situação</span>
-                    <span style="text-align:right">Vencimento</span>
-                </div>
-
-                <div class="trainings-panel__body" id="trainings-body">
-                    <div class="empty-state">
-                        <div class="empty-state__icon">⏳</div>
-                        <div class="empty-state__title">Carregando treinamentos...</div>
-                    </div>
-                </div>
-            </div>
 
         </div>
     </main>

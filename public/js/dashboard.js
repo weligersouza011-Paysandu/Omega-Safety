@@ -30,10 +30,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (user.perfil === 'adm') {
         document.getElementById('stats-section').classList.remove('hidden');
         loadAdmStats();
-    } else {
-        // Módulo "Matriz" (Maturidade VPS) é exclusivo de ADM
-        const cardMatriz = document.getElementById('card-matriz');
-        if (cardMatriz) cardMatriz.classList.add('hidden');
     }
 });
 
