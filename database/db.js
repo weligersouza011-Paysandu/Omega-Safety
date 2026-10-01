@@ -15,15 +15,29 @@ function convertPlaceholders(sql) {
 
 if (isPostgres) {
     console.log('[DB] Conectando ao PostgreSQL (DATABASE_URL ativa)...');
-    const { Pool } = require('pg');
+    const { Pool, types } = require('pg');
+    // int8 (BIGINT, ex.: COUNT(*)) → number, igual ao SQLite (o pg devolve string)
+    types.setTypeParser(20, (v) => parseInt(v, 10));
     const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
+        ssl: { rejectUnauthorized: false },
+        max: 15
     });
 
     pool.on('error', (err) => {
         console.error('[DB] Erro no pool PostgreSQL:', err);
     });
+
+    // Keepalive opcional (DB_KEEPALIVE_S): mantém o compute do Neon acordado
+    // para o 1º request não apanhar cold start (~2,6s). Default: desligado.
+    const keepaliveS = parseInt(process.env.DB_KEEPALIVE_S || '0', 10);
+    if (keepaliveS > 0) {
+        const timer = setInterval(() => {
+            pool.query('SELECT 1').catch(() => {});
+        }, keepaliveS * 1000);
+        if (timer.unref) timer.unref();
+        console.log(`[DB] Keepalive Neon ativo: SELECT 1 a cada ${keepaliveS}s (DB_KEEPALIVE_S)`);
+    }
 
     db.runAsync = async (sql, params = []) => {
         if (sql.trim().toUpperCase().startsWith('PRAGMA')) return { changes: 0 };
@@ -262,6 +276,11 @@ async function initDB() {
             detalhes        TEXT,
             FOREIGN KEY (caderno_id) REFERENCES cadernos_inspecao(id) ON DELETE CASCADE ON UPDATE CASCADE
         );
+
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_data      ON caderno_respostas(data_inspecao);
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_matricula ON caderno_respostas(matricula);
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_caderno   ON caderno_respostas(caderno_id);
+        CREATE INDEX IF NOT EXISTS idx_cadernos_inspecao_status    ON cadernos_inspecao(status);
         `;
 
         await db.execAsync(postgresSchema);

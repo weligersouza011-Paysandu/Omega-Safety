@@ -111,365 +111,174 @@ router.get('/respostas', requireAuth, async (req, res) => {
 });
 
 // GET /api/inspecoes/respostas/stats — Estatísticas para Dashboard
+// Perf.: queries independentes disparam em paralelo (Promise.all) e a categoria
+// é calculada uma única vez numa CTE base (antes: 4× + 2 varreduras da tabela).
 router.get('/respostas/stats', requireAuth, async (req, res) => {
     try {
         const privileged = isPrivileged(req.session.usuario);
         const mat = req.session.usuario.matricula;
 
-        const baseWhere = privileged ? '1=1' : 'r.matricula = ?';
         const baseParams = privileged ? [] : [mat];
+        const whereMat    = privileged ? '' : 'AND r.matricula = ?';
+        const whereMatBare = privileged ? '' : 'AND matricula = ?';
 
-        const totalRespostas = (await db.getAsync(
-            `SELECT COUNT(*) as count FROM caderno_respostas r WHERE ${baseWhere}`, baseParams
-        )).count;
+        const categoriaExpr = `COALESCE(
+            NULLIF(TRIM(c.categoria), ''),
+            NULLIF(TRIM(r.categoria), ''),
+            CASE
+                WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
+                WHEN c.nome LIKE '%5S%' THEN '5S'
+                WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
+                WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
+                WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
+                ELSE 'Geral'
+            END
+        )`;
 
-        const totalCadernos = (await db.getAsync(
-            "SELECT COUNT(*) as count FROM cadernos_inspecao WHERE status='ativo'"
-        )).count;
+        const [
+            porCaderno, porMes, porMesCategoria, porCategoria,
+            conclusaoTecnica, porFrenteServico, porLideranca,
+            porUsuario, respostas, todosContratosRows
+        ] = await Promise.all([
+            db.allAsync(
+                privileged
+                    ? `SELECT c.nome, COUNT(r.id) as total
+                       FROM cadernos_inspecao c
+                       LEFT JOIN caderno_respostas r ON r.caderno_id = c.id
+                       WHERE c.status = 'ativo'
+                       GROUP BY c.id ORDER BY total DESC`
+                    : `SELECT c.nome, COUNT(r.id) as total
+                       FROM cadernos_inspecao c
+                       JOIN caderno_respostas r ON r.caderno_id = c.id
+                       WHERE r.matricula = ? AND c.status = 'ativo'
+                       GROUP BY c.id ORDER BY total DESC`, baseParams
+            ),
 
-        const porCaderno = await db.allAsync(
-            privileged
-                ? `SELECT c.nome, COUNT(r.id) as total
-                   FROM cadernos_inspecao c
-                   LEFT JOIN caderno_respostas r ON r.caderno_id = c.id
-                   WHERE c.status = 'ativo'
-                   GROUP BY c.id ORDER BY total DESC`
-                : `SELECT c.nome, COUNT(r.id) as total
-                   FROM cadernos_inspecao c
-                   JOIN caderno_respostas r ON r.caderno_id = c.id
-                   WHERE r.matricula = ? AND c.status = 'ativo'
-                   GROUP BY c.id ORDER BY total DESC`, baseParams
-        );
+            db.allAsync(
+                `SELECT substr(CAST(data_inspecao AS TEXT), 1, 7) as mes, COUNT(*) as total
+                 FROM caderno_respostas
+                 WHERE data_inspecao IS NOT NULL AND CAST(data_inspecao AS TEXT) != ''
+                 ${whereMatBare}
+                 GROUP BY mes ORDER BY mes ASC`, baseParams
+            ),
 
-        const porMes = await db.allAsync(
-            privileged
-                ? `SELECT strftime('%Y-%m', data_inspecao) as mes, COUNT(*) as total
-                   FROM caderno_respostas
-                   WHERE data_inspecao IS NOT NULL AND data_inspecao != ''
-                   GROUP BY mes ORDER BY mes ASC`
-                : `SELECT strftime('%Y-%m', data_inspecao) as mes, COUNT(*) as total
-                   FROM caderno_respostas
-                   WHERE matricula = ? AND data_inspecao IS NOT NULL AND data_inspecao != ''
-                   GROUP BY mes ORDER BY mes ASC`, baseParams
-        );
+            db.allAsync(
+                `WITH base AS (
+                     SELECT
+                         substr(CAST(r.data_inspecao AS TEXT), 1, 7) as mes,
+                         ${categoriaExpr} as categoria,
+                         r.nome_inspetor
+                     FROM caderno_respostas r
+                     LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
+                     WHERE r.data_inspecao IS NOT NULL
+                       AND CAST(r.data_inspecao AS TEXT) != ''
+                       ${whereMat}
+                 ),
+                 cat_totals AS (
+                     SELECT mes, categoria, COUNT(*) as total
+                     FROM base GROUP BY 1, 2
+                 ),
+                 user_counts AS (
+                     SELECT mes, categoria, nome_inspetor,
+                            COUNT(*) as total_insp,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY mes, categoria
+                                ORDER BY COUNT(*) DESC
+                            ) as rn
+                     FROM base
+                     GROUP BY 1, 2, 3
+                 )
+                 SELECT
+                     t.mes,
+                     t.categoria,
+                     t.total,
+                     u.nome_inspetor as top_inspetor,
+                     u.total_insp as top_inspetor_count
+                 FROM cat_totals t
+                 LEFT JOIN user_counts u
+                   ON u.mes = t.mes AND u.categoria = t.categoria AND u.rn = 1
+                 ORDER BY t.mes ASC, t.categoria ASC`, baseParams
+            ),
 
-        const catParams = privileged ? [] : [mat, mat];
-        const porMesCategoria = await db.allAsync(
-            privileged
-                ? `WITH user_counts AS (
-                       SELECT 
-                           strftime('%Y-%m', r.data_inspecao) as mes,
-                           COALESCE(
-                               NULLIF(TRIM(c.categoria), ''),
-                               NULLIF(TRIM(r.categoria), ''),
-                               CASE 
-                                   WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                   WHEN c.nome LIKE '%5S%' THEN '5S'
-                                   WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                   WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                   WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                   ELSE 'Geral'
-                               END
-                           ) as categoria,
-                           r.nome_inspetor,
-                           COUNT(*) as total_insp,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY strftime('%Y-%m', r.data_inspecao), 
-                               COALESCE(
-                                   NULLIF(TRIM(c.categoria), ''),
-                                   NULLIF(TRIM(r.categoria), ''),
-                                   CASE 
-                                       WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                       WHEN c.nome LIKE '%5S%' THEN '5S'
-                                       WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                       WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                       WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                       ELSE 'Geral'
-                                   END
-                               )
-                               ORDER BY COUNT(*) DESC
-                           ) as rn
-                       FROM caderno_respostas r
-                       LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                       WHERE r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                       GROUP BY 1, 2, r.nome_inspetor
-                   ),
-                   cat_totals AS (
-                       SELECT 
-                           strftime('%Y-%m', r.data_inspecao) as mes,
-                           COALESCE(
-                               NULLIF(TRIM(c.categoria), ''),
-                               NULLIF(TRIM(r.categoria), ''),
-                               CASE 
-                                   WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                   WHEN c.nome LIKE '%5S%' THEN '5S'
-                                   WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                   WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                   WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                   ELSE 'Geral'
-                               END
-                           ) as categoria,
-                           COUNT(*) as total
-                       FROM caderno_respostas r
-                       LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                       WHERE r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                       GROUP BY 1, 2
-                   )
-                   SELECT 
-                       t.mes,
-                       t.categoria,
-                       t.total,
-                       u.nome_inspetor as top_inspetor,
-                       u.total_insp as top_inspetor_count
-                   FROM cat_totals t
-                   LEFT JOIN user_counts u ON u.mes = t.mes AND u.categoria = t.categoria AND u.rn = 1
-                   ORDER BY t.mes ASC, t.categoria ASC`
-                : `WITH user_counts AS (
-                       SELECT 
-                           strftime('%Y-%m', r.data_inspecao) as mes,
-                           COALESCE(
-                               NULLIF(TRIM(c.categoria), ''),
-                               NULLIF(TRIM(r.categoria), ''),
-                               CASE 
-                                   WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                   WHEN c.nome LIKE '%5S%' THEN '5S'
-                                   WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                   WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                   WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                   ELSE 'Geral'
-                               END
-                           ) as categoria,
-                           r.nome_inspetor,
-                           COUNT(*) as total_insp,
-                           ROW_NUMBER() OVER (
-                               PARTITION BY strftime('%Y-%m', r.data_inspecao), 
-                               COALESCE(
-                                   NULLIF(TRIM(c.categoria), ''),
-                                   NULLIF(TRIM(r.categoria), ''),
-                                   CASE 
-                                       WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                       WHEN c.nome LIKE '%5S%' THEN '5S'
-                                       WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                       WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                       WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                       ELSE 'Geral'
-                                   END
-                               )
-                               ORDER BY COUNT(*) DESC
-                           ) as rn
-                       FROM caderno_respostas r
-                       LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                       WHERE r.matricula = ? AND r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                       GROUP BY 1, 2, r.nome_inspetor
-                   ),
-                   cat_totals AS (
-                       SELECT 
-                           strftime('%Y-%m', r.data_inspecao) as mes,
-                           COALESCE(
-                               NULLIF(TRIM(c.categoria), ''),
-                               NULLIF(TRIM(r.categoria), ''),
-                               CASE 
-                                   WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                                   WHEN c.nome LIKE '%5S%' THEN '5S'
-                                   WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                                   WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                                   WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                                   ELSE 'Geral'
-                               END
-                           ) as categoria,
-                           COUNT(*) as total
-                       FROM caderno_respostas r
-                       LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                       WHERE r.matricula = ? AND r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                       GROUP BY 1, 2
-                   )
-                   SELECT 
-                       t.mes,
-                       t.categoria,
-                       t.total,
-                       u.nome_inspetor as top_inspetor,
-                       u.total_insp as top_inspetor_count
-                   FROM cat_totals t
-                   LEFT JOIN user_counts u ON u.mes = t.mes AND u.categoria = t.categoria AND u.rn = 1
-                   ORDER BY t.mes ASC, t.categoria ASC`, catParams
-        );
+            db.allAsync(
+                `SELECT ${categoriaExpr} as categoria, COUNT(*) as total
+                 FROM caderno_respostas r
+                 LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
+                 ${privileged ? '' : 'WHERE r.matricula = ?'}
+                 GROUP BY 1 ORDER BY total DESC`, baseParams
+            ),
 
-        const porCategoria = await db.allAsync(
-            privileged
-                ? `SELECT COALESCE(
-                       NULLIF(TRIM(c.categoria), ''),
-                       NULLIF(TRIM(r.categoria), ''),
-                       CASE 
-                           WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                           WHEN c.nome LIKE '%5S%' THEN '5S'
-                           WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                           WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                           WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                           ELSE 'Geral'
-                       END
-                   ) as categoria, COUNT(*) as total
-                   FROM caderno_respostas r
-                   LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                   GROUP BY 1 ORDER BY total DESC`
-                : `SELECT COALESCE(
-                       NULLIF(TRIM(c.categoria), ''),
-                       NULLIF(TRIM(r.categoria), ''),
-                       CASE 
-                           WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                           WHEN c.nome LIKE '%5S%' THEN '5S'
-                           WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                           WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                           WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                           ELSE 'Geral'
-                       END
-                   ) as categoria, COUNT(*) as total
-                   FROM caderno_respostas r
-                   LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                   WHERE r.matricula = ?
-                   GROUP BY 1 ORDER BY total DESC`, baseParams
-        );
+            db.allAsync(
+                `SELECT COALESCE(conclusao_tecnica, 'Não informado') as tipo, COUNT(*) as total
+                 FROM caderno_respostas
+                 WHERE 1=1 ${whereMatBare}
+                 GROUP BY conclusao_tecnica ORDER BY total DESC`, baseParams
+            ),
 
-        const conclusaoTecnica = await db.allAsync(
-            privileged
-                ? `SELECT COALESCE(conclusao_tecnica, 'Não informado') as tipo, COUNT(*) as total
-                   FROM caderno_respostas
-                   GROUP BY conclusao_tecnica ORDER BY total DESC`
-                : `SELECT COALESCE(conclusao_tecnica, 'Não informado') as tipo, COUNT(*) as total
-                   FROM caderno_respostas WHERE matricula = ?
-                   GROUP BY conclusao_tecnica ORDER BY total DESC`, baseParams
-        );
+            db.allAsync(
+                `SELECT local, COUNT(*) as total
+                 FROM caderno_respostas
+                 WHERE local IS NOT NULL AND local != '' ${whereMatBare}
+                 GROUP BY local ORDER BY total DESC LIMIT 15`, baseParams
+            ),
 
-        const porFrenteServico = await db.allAsync(
-            privileged
-                ? `SELECT local, COUNT(*) as total
-                   FROM caderno_respostas
-                   WHERE local IS NOT NULL AND local != ''
-                   GROUP BY local ORDER BY total DESC LIMIT 15`
-                : `SELECT local, COUNT(*) as total
-                   FROM caderno_respostas
-                   WHERE matricula = ? AND local IS NOT NULL AND local != ''
-                   GROUP BY local ORDER BY total DESC LIMIT 15`, baseParams
-        );
+            db.allAsync(
+                `SELECT
+                     COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
+                     COUNT(*) as total
+                 FROM caderno_respostas r
+                 LEFT JOIN usuarios u ON u.matricula = r.matricula
+                 ${privileged ? '' : 'WHERE r.matricula = ?'}
+                 GROUP BY 1 ORDER BY total DESC LIMIT 15`, baseParams
+            ),
 
-        const porSubcategoria = await db.allAsync(
-            privileged
-                ? `SELECT COALESCE(subcategoria, 'Não categorizado') as subcategoria, COUNT(*) as total
-                   FROM caderno_respostas
-                   GROUP BY subcategoria ORDER BY total DESC LIMIT 15`
-                : `SELECT COALESCE(subcategoria, 'Não categorizado') as subcategoria, COUNT(*) as total
-                   FROM caderno_respostas WHERE matricula = ?
-                   GROUP BY subcategoria ORDER BY total DESC LIMIT 15`, baseParams
-        );
+            db.allAsync(
+                `SELECT nome_inspetor, COUNT(*) as total
+                 FROM caderno_respostas
+                 WHERE 1=1 ${whereMatBare}
+                 GROUP BY nome_inspetor ORDER BY total DESC`, baseParams
+            ),
 
-        const porLideranca = await db.allAsync(
-            privileged
-                ? `SELECT 
-                       COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
-                       COUNT(*) as total
-                   FROM caderno_respostas r
-                   LEFT JOIN usuarios u ON u.matricula = r.matricula
-                   GROUP BY 1 ORDER BY total DESC LIMIT 15`
-                : `SELECT 
-                       COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
-                       COUNT(*) as total
-                   FROM caderno_respostas r
-                   LEFT JOIN usuarios u ON u.matricula = r.matricula
-                   WHERE r.matricula = ?
-                   GROUP BY 1 ORDER BY total DESC LIMIT 15`, baseParams
-        );
+            db.allAsync(
+                `SELECT
+                     substr(CAST(r.data_inspecao AS TEXT), 1, 7) as mes,
+                     COALESCE(NULLIF(TRIM(r.contrato), ''), NULLIF(TRIM(c.contrato), ''), 'Geral') as contrato,
+                     ${categoriaExpr} as categoria,
+                     COALESCE(c.nome, 'Caderno Desconhecido') as caderno_nome,
+                     COALESCE(r.local, 'Não informado') as frente,
+                     COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
+                     COALESCE(r.conclusao_tecnica, 'Em Conformidade') as conclusao_tecnica,
+                     COALESCE(r.nome_inspetor, 'Inspetor') as nome_inspetor
+                 FROM caderno_respostas r
+                 LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
+                 LEFT JOIN usuarios u ON u.matricula = r.matricula
+                 WHERE r.data_inspecao IS NOT NULL
+                   AND CAST(r.data_inspecao AS TEXT) != ''
+                   ${whereMat}
+                 ORDER BY r.data_inspecao ASC`, baseParams
+            ),
 
-        const porUsuario = await db.allAsync(
-            privileged
-                ? `SELECT nome_inspetor, COUNT(*) as total
-                   FROM caderno_respostas
-                   GROUP BY nome_inspetor ORDER BY total DESC`
-                : `SELECT nome_inspetor, COUNT(*) as total
-                   FROM caderno_respostas WHERE matricula = ?
-                   GROUP BY nome_inspetor ORDER BY total DESC`, baseParams
-        );
-
-        const respostas = await db.allAsync(
-            privileged
-                ? `SELECT 
-                       r.id,
-                       strftime('%Y-%m', r.data_inspecao) as mes,
-                       strftime('%Y', r.data_inspecao) as ano,
-                       COALESCE(NULLIF(TRIM(r.contrato), ''), NULLIF(TRIM(c.contrato), ''), 'Geral') as contrato,
-                       COALESCE(
-                           NULLIF(TRIM(c.categoria), ''),
-                           NULLIF(TRIM(r.categoria), ''),
-                           CASE 
-                               WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                               WHEN c.nome LIKE '%5S%' THEN '5S'
-                               WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                               WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                               WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                               ELSE 'Geral'
-                           END
-                       ) as categoria,
-                       COALESCE(c.nome, 'Caderno Desconhecido') as caderno_nome,
-                       COALESCE(r.local, 'Não informado') as frente,
-                       COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
-                       COALESCE(r.conclusao_tecnica, 'Em Conformidade') as conclusao_tecnica,
-                       COALESCE(r.nome_inspetor, 'Inspetor') as nome_inspetor
-                   FROM caderno_respostas r
-                   LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                   LEFT JOIN usuarios u ON u.matricula = r.matricula
-                   WHERE r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                   ORDER BY r.data_inspecao ASC`
-                : `SELECT 
-                       r.id,
-                       strftime('%Y-%m', r.data_inspecao) as mes,
-                       strftime('%Y', r.data_inspecao) as ano,
-                       COALESCE(NULLIF(TRIM(r.contrato), ''), NULLIF(TRIM(c.contrato), ''), 'Geral') as contrato,
-                       COALESCE(
-                           NULLIF(TRIM(c.categoria), ''),
-                           NULLIF(TRIM(r.categoria), ''),
-                           CASE 
-                               WHEN c.nome LIKE '%NR%' OR c.nome LIKE '%RAC%' THEN 'NR'
-                               WHEN c.nome LIKE '%5S%' THEN '5S'
-                               WHEN c.nome LIKE '%Passaporte%' THEN 'Passaporte'
-                               WHEN c.nome LIKE '%Incêndio%' OR c.nome LIKE '%Ambiente%' THEN 'Meio Ambiente'
-                               WHEN c.nome LIKE '%Checklist%' THEN 'Checklist'
-                               ELSE 'Geral'
-                           END
-                       ) as categoria,
-                       COALESCE(c.nome, 'Caderno Desconhecido') as caderno_nome,
-                       COALESCE(r.local, 'Não informado') as frente,
-                       COALESCE(NULLIF(TRIM(r.lideranca), ''), NULLIF(TRIM(u.lideranca), ''), 'Não informada') as lideranca,
-                       COALESCE(r.conclusao_tecnica, 'Em Conformidade') as conclusao_tecnica,
-                       COALESCE(r.nome_inspetor, 'Inspetor') as nome_inspetor
-                   FROM caderno_respostas r
-                   LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                   LEFT JOIN usuarios u ON u.matricula = r.matricula
-                   WHERE r.matricula = ? AND r.data_inspecao IS NOT NULL AND r.data_inspecao != ''
-                   ORDER BY r.data_inspecao ASC`, baseParams
-        );
-
-        const todosContratosRows = await db.allAsync(`
-            SELECT DISTINCT contrato FROM (
-                SELECT contrato FROM caderno_respostas WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
-                UNION
-                SELECT contrato FROM cadernos_inspecao WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
-                UNION
-                SELECT contrato FROM usuarios WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
-            ) ORDER BY contrato ASC
-        `);
-        const todosContratos = todosContratosRows.map(r => r.contrato);
+            db.allAsync(`
+                SELECT DISTINCT contrato FROM (
+                    SELECT contrato FROM caderno_respostas WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                    UNION
+                    SELECT contrato FROM cadernos_inspecao WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                    UNION
+                    SELECT contrato FROM usuarios WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                ) ORDER BY contrato ASC
+            `)
+        ]);
 
         res.json({
-            totalRespostas,
-            totalCadernos,
             porCaderno,
             porMes,
             porMesCategoria,
             porCategoria,
             conclusaoTecnica,
             porFrenteServico,
-            porSubcategoria,
             porLideranca,
             porUsuario,
-            todosContratos,
+            todosContratos: todosContratosRows.map(r => r.contrato),
             respostas
         });
     } catch(err) {
