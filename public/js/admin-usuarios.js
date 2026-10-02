@@ -2,6 +2,16 @@
 
 let parsedUsers = [];
 
+const MAX_LINHAS_LOTE = 2000; // limite por lote (igual ao backend)
+const LOTE_CHUNK       = 200;  // registros por requisição (chunking)
+const CONTRATO_RE      = /^[0-9a-zA-Z,\s\-_]+$/;
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Apenas ADM pode acessar
     const user = await requireLogin('adm');
@@ -341,12 +351,24 @@ function setupBatchLogic() {
     const previewArea = document.getElementById('lote-preview-area');
     const tbody       = document.getElementById('preview-tbody');
     const countLabel  = document.getElementById('preview-count');
+    const warnArea    = document.getElementById('preview-warnings');
+    const statusArea  = document.getElementById('lote-status');
     const btnSubmit   = document.getElementById('btn-submit-lote');
+    const BTN_LABEL   = 'Salvar Usuários';
+
+    function setStatus(msg) {
+        if (!statusArea) return;
+        statusArea.textContent = msg || '';
+        statusArea.style.display = msg ? 'block' : 'none';
+    }
 
     btnLimpar.addEventListener('click', () => {
         inputArea.value = '';
         parsedUsers = [];
         previewArea.style.display = 'none';
+        warnArea.innerHTML = '';
+        warnArea.style.display = 'none';
+        setStatus('');
         inputArea.focus();
     });
 
@@ -357,34 +379,72 @@ function setupBatchLogic() {
             return;
         }
 
-        parsedUsers = [];
-        const lines = text.split('\n');
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+        if (lines.length > MAX_LINHAS_LOTE) {
+            showToast(`Lote com ${lines.length} linhas excede o limite de ${MAX_LINHAS_LOTE}. Divida em lotes menores.`, 'error', 6000);
+            return;
+        }
 
-        lines.forEach(line => {
+        parsedUsers = [];
+        const ignoradas = []; // { linha, motivo }
+        const vistos = new Set();
+
+        lines.forEach((line, i) => {
             const cleanLine = line.trim();
-            if (!cleanLine) return;
+            const numLinha = i + 1;
 
             // Divide por Tabulação, Ponto-e-vírgula ou Vírgula
-            const parts = cleanLine.split(/\t|;|,/);
-            if (parts.length >= 2) {
-                const mat = parts[0].trim();
-                const nome = parts[1].trim();
-                const contrato = parts.length > 2 ? parts[2].trim() : '';
-                if (mat && nome) {
-                    parsedUsers.push({ matricula: mat, nome: nome, contrato: contrato });
-                }
+            const parts = cleanLine.split(/\t|;|,/).map(p => p.trim());
+            if (parts.length < 2) {
+                return ignoradas.push({ linha: numLinha, motivo: 'formato inválido (use Matrícula;Nome;Contrato)' });
             }
+
+            const mat = parts[0] || '';
+            const nome = parts[1] || '';
+            const contrato = parts[2] || '';
+
+            if (!mat || !nome) return ignoradas.push({ linha: numLinha, motivo: 'matrícula ou nome vazio' });
+            if (mat.length > 255) return ignoradas.push({ linha: numLinha, motivo: 'matrícula acima de 255 caracteres' });
+            if (nome.length > 255) return ignoradas.push({ linha: numLinha, motivo: 'nome acima de 255 caracteres' });
+            if (contrato && !CONTRATO_RE.test(contrato)) {
+                return ignoradas.push({ linha: numLinha, motivo: 'contrato inválido (ex: 251 ou 251, 301)' });
+            }
+            if (vistos.has(mat)) return ignoradas.push({ linha: numLinha, motivo: `matrícula ${mat} repetida no lote` });
+
+            vistos.add(mat);
+            parsedUsers.push({ matricula: mat, nome: nome, contrato: contrato });
         });
+
+        renderPreviewWarnings(ignoradas);
 
         if (parsedUsers.length === 0) {
             showToast('Nenhum dado válido encontrado. Use o formato: Matrícula ; Nome ; Contrato', 'error');
+            previewArea.style.display = 'none';
             return;
         }
 
         renderPreviewTable();
         countLabel.textContent = parsedUsers.length;
         previewArea.style.display = 'block';
+        setStatus(ignoradas.length
+            ? `${parsedUsers.length} válidos · ${ignoradas.length} linha(s) ignorada(s) — revise antes de salvar.`
+            : `${parsedUsers.length} registro(s) pronto(s) para salvar.`);
     });
+
+    function renderPreviewWarnings(ignoradas) {
+        if (!warnArea) return;
+        if (!ignoradas.length) {
+            warnArea.innerHTML = '';
+            warnArea.style.display = 'none';
+            return;
+        }
+        const mostradas = ignoradas.slice(0, 10);
+        warnArea.innerHTML = `<strong>${ignoradas.length} linha(s) ignorada(s) na validação:</strong><ul style="margin:4px 0 0 18px; padding:0;">` +
+            mostradas.map(x => `<li>Linha ${x.linha}: ${escapeHtml(x.motivo)}</li>`).join('') +
+            (ignoradas.length > 10 ? `<li>… e mais ${ignoradas.length - 10}.</li>` : '') +
+            `</ul>`;
+        warnArea.style.display = 'block';
+    }
 
     // Delegar evento de exclusão na tabela de preview
     tbody.addEventListener('click', (e) => {
@@ -393,6 +453,7 @@ function setupBatchLogic() {
             parsedUsers.splice(index, 1);
             renderPreviewTable();
             countLabel.textContent = parsedUsers.length;
+            setStatus(parsedUsers.length ? `${parsedUsers.length} registro(s) pronto(s) para salvar.` : '');
             if (parsedUsers.length === 0) {
                 previewArea.style.display = 'none';
             }
@@ -402,9 +463,9 @@ function setupBatchLogic() {
     function renderPreviewTable() {
         tbody.innerHTML = parsedUsers.map((u, i) => `
             <tr>
-                <td style="font-family:monospace; font-weight:600;">${u.matricula}</td>
-                <td>${u.nome}</td>
-                <td><span class="badge" style="background:var(--color-bg-input);">${u.contrato || '—'}</span></td>
+                <td style="font-family:monospace; font-weight:600;">${escapeHtml(u.matricula)}</td>
+                <td>${escapeHtml(u.nome)}</td>
+                <td><span class="badge" style="background:var(--color-bg-input);">${escapeHtml(u.contrato || '—')}</span></td>
                 <td>
                     <button type="button" class="btn-remove-row" data-index="${i}" style="background:none; border:none; color:var(--color-red-primary); cursor:pointer; font-size:16px;">Excluir</button>
                 </td>
@@ -412,25 +473,63 @@ function setupBatchLogic() {
         `).join('');
     }
 
+    // Envio em lotes menores (chunking): cada requisição é rápida e
+    // não estoura timeout/limite de payload; há progresso visível.
     btnSubmit.addEventListener('click', async () => {
         if (parsedUsers.length === 0) return;
 
+        const total = parsedUsers.length;
+        let processados = 0;
+        let inseridos = 0, ignorados = 0, invalidos = 0;
+
         btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;"></span> Salvando...';
+        setStatus(`Iniciando envio de ${total} registro(s)...`);
 
         try {
-            const res = await api.post('/users/batch', { users: parsedUsers });
-            showToast(res.message, 'success', 6000);
-            
+            for (let i = 0; i < total; i += LOTE_CHUNK) {
+                const chunk = parsedUsers.slice(i, i + LOTE_CHUNK);
+                const fim = Math.min(i + LOTE_CHUNK, total);
+
+                btnSubmit.innerHTML = `<span class="spinner" style="width:16px;height:16px;border-width:2px;border-top-color:#fff;"></span> Salvando ${fim}/${total}...`;
+                setStatus(`Processando ${i}/${total} enviados · ${inseridos} inseridos até agora...`);
+
+                const res = await api.post('/users/batch', { users: chunk }, { timeout: 30000 });
+                inseridos  += res.insertedCount || 0;
+                ignorados  += res.ignoredCount || 0;
+                invalidos  += res.invalidCount || 0;
+                processados += chunk.length;
+            }
+
+            const resumo = [`Inseridos: ${inseridos}`, `Já existentes: ${ignorados}`];
+            if (invalidos) resumo.push(`Inválidos: ${invalidos}`);
+            showToast(`Lote salvo com sucesso! ${resumo.join(' · ')}`, 'success', 6000);
+
             // Limpa após sucesso
             inputArea.value = '';
             parsedUsers = [];
             previewArea.style.display = 'none';
+            warnArea.innerHTML = '';
+            warnArea.style.display = 'none';
+            setStatus(`Concluído: ${resumo.join(' · ')}.`);
         } catch (err) {
-            showToast(err.message || 'Erro ao processar lote.', 'error');
+            const restantes = total - processados;
+            const motivo = err.message || 'Erro ao processar lote.';
+
+            if (processados > 0) {
+                // Falha parcial: mantém no preview apenas o que faltou, para reenviar
+                parsedUsers = parsedUsers.slice(processados);
+                renderPreviewTable();
+                countLabel.textContent = parsedUsers.length;
+                previewArea.style.display = 'block';
+                setStatus(`Interrompido após ${processados}/${total}. ${restantes} registro(s) restantes mantidos no preview.`);
+                showToast(`Parcial: ${processados} de ${total} processados (${inseridos} inseridos). Restante não enviado — ${motivo}`, 'error', 8000);
+            } else {
+                setStatus('');
+                showToast(motivo, 'error', 7000);
+            }
         } finally {
             btnSubmit.disabled = false;
-            btnSubmit.innerHTML = 'Salvar Usuários';
+            btnSubmit.innerHTML = BTN_LABEL;
         }
     });
 }

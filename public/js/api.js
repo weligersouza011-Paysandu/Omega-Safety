@@ -58,6 +58,7 @@ window.onGlobalChange = onGlobalChange;
 //  CONFIGURAÇÃO ANTI-CACHE E FETCH WRAPPER
 // ══════════════════════════════════════════════════════════════
 async function apiFetch(endpoint, options = {}) {
+    const { timeout, ...rest } = options;
     const separator = endpoint.includes('?') ? '&' : '?';
     // Parâmetro de timestamp anti-cache estrito para evitar cache do navegador/proxy ao trocar filtros/locais
     const cacheBuster = `_t=${Date.now()}`;
@@ -71,7 +72,7 @@ async function apiFetch(endpoint, options = {}) {
             'Pragma': 'no-cache',
             'Expires': '0',
         },
-        ...options,
+        ...rest,
     };
 
     // Mesclar headers adicionais fornecidos em options
@@ -87,7 +88,26 @@ async function apiFetch(endpoint, options = {}) {
         }
     }
 
-    const res = await fetch(url, config);
+    // Timeout opcional: evita requisições penduradas (lotes grandes, rede instável)
+    let timer = null;
+    if (timeout && typeof AbortController !== 'undefined') {
+        const controller = new AbortController();
+        config.signal = controller.signal;
+        timer = setTimeout(() => controller.abort(), timeout);
+    }
+
+    let res;
+    try {
+        res = await fetch(url, config);
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error(`Tempo limite excedido (${Math.round(timeout / 1000)}s). Verifique sua conexão e tente novamente.`);
+        }
+        throw new Error('Falha de conexão com o servidor.');
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -102,8 +122,8 @@ async function apiFetch(endpoint, options = {}) {
 // Atalhos com auto-notificação de mutação
 const api = {
     get: (ep) => apiFetch(ep, { method: 'GET' }),
-    post: async (ep, body) => {
-        const res = await apiFetch(ep, { method: 'POST', body });
+    post: async (ep, body, opts = {}) => {
+        const res = await apiFetch(ep, { method: 'POST', body, ...opts });
         notifyGlobalChange('post', { endpoint: ep });
         return res;
     },
@@ -117,8 +137,8 @@ const api = {
         notifyGlobalChange('patch', { endpoint: ep });
         return res;
     },
-    delete: async (ep) => {
-        const res = await apiFetch(ep, { method: 'DELETE' });
+    delete: async (ep, body) => {
+        const res = await apiFetch(ep, { method: 'DELETE', body });
         notifyGlobalChange('delete', { endpoint: ep });
         return res;
     },

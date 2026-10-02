@@ -21,7 +21,11 @@ if (isPostgres) {
     const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
         ssl: { rejectUnauthorized: false },
-        max: 15
+        max: 15,
+        // Evita espera infinita por conexão/query (lotes grandes não penduram a request)
+        connectionTimeoutMillis: 10000,
+        idleTimeoutMillis: 30000,
+        statement_timeout: 30000
     });
 
     pool.on('error', (err) => {
@@ -89,6 +93,48 @@ if (isPostgres) {
     db.execAsync = (sql) => new Promise((res,rej) =>
         sqliteDb.exec(sql, (err) => err ? rej(err) : res()));
 }
+
+// ── Transação em uma única conexão dedicada ─────────────────────
+// No PostgreSQL, BEGIN/COMMIT/ROLLBACK precisam estar na MESMA conexão —
+// usar pool.query() para cada comando espalhava a transação por vários
+// clients (transações órfãs e rollback ineficaz). No SQLite a conexão já é única.
+db.withTransaction = async (fn) => {
+    if (isPostgres) {
+        const client = await db.pool.connect();
+        const scoped = {
+            runAsync: async (sql, params = []) => {
+                const res = await client.query(convertPlaceholders(sql), params);
+                return { lastID: res.rows[0]?.id || null, changes: res.rowCount };
+            },
+            getAsync: async (sql, params = []) =>
+                (await client.query(convertPlaceholders(sql), params)).rows[0] || null,
+            allAsync: async (sql, params = []) =>
+                (await client.query(convertPlaceholders(sql), params)).rows || [],
+            execAsync: async (sql) => client.query(sql),
+        };
+        try {
+            await client.query('BEGIN');
+            const result = await fn(scoped);
+            await client.query('COMMIT');
+            return result;
+        } catch (err) {
+            try { await client.query('ROLLBACK'); } catch (e) {}
+            throw err;
+        } finally {
+            client.release();
+        }
+    }
+
+    await db.runAsync('BEGIN TRANSACTION');
+    try {
+        const result = await fn(db);
+        await db.runAsync('COMMIT');
+        return result;
+    } catch (err) {
+        try { await db.runAsync('ROLLBACK'); } catch (e) {}
+        throw err;
+    }
+};
 
 async function initDB() {
     if (isPostgres) {
@@ -405,5 +451,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         try { await tentarInit(); } catch (err) { console.error('[DB] Retry automático falhou:', err.message); }
     }, 60000);
 })();
+
+db.isPostgres = isPostgres;
 
 module.exports = db;

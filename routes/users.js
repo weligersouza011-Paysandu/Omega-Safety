@@ -14,53 +14,95 @@ const upload = multer({
 });
 
 // ── Cadastro em Lote (Operacional) ────────────────────────
+const MAX_LOTE       = 2000;  // registros por requisição
+const LOTE_CHUNK     = 200;   // linhas por statement multi-row (200×3 = 600 params < 999 do SQLite)
+const CONTRATO_RE    = /^[0-9a-zA-Z,\s\-_]+$/;
+
+// Insert multi-linha em uma única query por chunk (em vez de 1 query por linha)
+async function insertUsuariosChunk(q, chunk) {
+    const verb = db.isPostgres ? 'INSERT INTO' : 'INSERT OR IGNORE INTO';
+    const onConflict = db.isPostgres ? ' ON CONFLICT (matricula) DO NOTHING' : '';
+    const placeholders = chunk.map(() => '(?, ?, \'operacional\', ?)').join(', ');
+    const params = [];
+    for (const u of chunk) params.push(u.matricula, u.nome, u.contrato);
+
+    const r = await q.runAsync(
+        ` ${verb} usuarios (matricula, nome, perfil, contrato) VALUES ${placeholders}${onConflict}`,
+        params
+    );
+    // PG: rowCount com DO NOTHING = linhas realmente inseridas | SQLite: changes do statement
+    return r.changes || 0;
+}
+
 router.post('/batch', requireAdm, async (req, res) => {
-    const { users } = req.body;
-    
+    const { users } = req.body || {};
+
     if (!Array.isArray(users) || users.length === 0) {
         return res.status(400).json({ error: 'Lista de usuários inválida ou vazia.' });
     }
+    if (users.length > MAX_LOTE) {
+        return res.status(400).json({ error: `Lote excede o limite de ${MAX_LOTE} registros. Divida em lotes menores.` });
+    }
 
-    let insertedCount = 0;
-    let ignoredCount  = 0;
+    // ── Validação eficiente (uma passada, sem I/O) ──
+    const errors = [];
+    const validos = [];
+    const vistos = new Set();
+
+    users.forEach((user, index) => {
+        const matricula = String(user?.matricula ?? '').trim();
+        const nome      = String(user?.nome ?? '').trim();
+        const contrato  = String(user?.contrato ?? '').trim();
+
+        if (!matricula)                       return errors.push({ index, matricula, motivo: 'Matrícula vazia.' });
+        if (matricula.length > 255)           return errors.push({ index, matricula, motivo: 'Matrícula acima de 255 caracteres.' });
+        if (!nome)                            return errors.push({ index, matricula, motivo: 'Nome vazio.' });
+        if (nome.length > 255)                return errors.push({ index, matricula, motivo: 'Nome acima de 255 caracteres.' });
+        if (contrato.length > 255)            return errors.push({ index, matricula, motivo: 'Contrato acima de 255 caracteres.' });
+        if (contrato && !CONTRATO_RE.test(contrato)) {
+                                              return errors.push({ index, matricula, motivo: 'Contrato inválido (ex: 251 ou 251, 301).' });
+        }
+        if (vistos.has(matricula))            return errors.push({ index, matricula, motivo: 'Matrícula repetida no lote.' });
+
+        vistos.add(matricula);
+        validos.push({ matricula, nome, contrato: contrato || null });
+    });
+
+    if (validos.length === 0) {
+        return res.status(422).json({
+            error: 'Nenhum registro válido no lote. Corrija as linhas indicadas e tente novamente.',
+            invalidCount: errors.length,
+            errors
+        });
+    }
 
     try {
-        // Usa transação para performance
-        await db.runAsync('BEGIN TRANSACTION');
-
-        for (const user of users) {
-            const { matricula, nome, contrato } = user;
-            if (!matricula || !nome) {
-                ignoredCount++;
-                continue; // Pula linha inválida
+        // Transação em conexão dedicada + inserts multi-linha em chunks:
+        // 1 requisição → ~⌈N/200⌉ queries (antes: N queries, uma por linha)
+        const insertedCount = await db.withTransaction(async (q) => {
+            let inseridos = 0;
+            for (let i = 0; i < validos.length; i += LOTE_CHUNK) {
+                inseridos += await insertUsuariosChunk(q, validos.slice(i, i + LOTE_CHUNK));
             }
+            return inseridos;
+        });
 
-            try {
-                // INSERT OR IGNORE no SQLite (evita erro de UNIQUE constraint na matrícula)
-                await db.runAsync(
-                    `INSERT OR IGNORE INTO usuarios (matricula, nome, perfil, contrato) VALUES (?, ?, 'operacional', ?)`,
-                    [matricula.trim(), nome.trim(), contrato ? contrato.trim() : null]
-                );
-                
-                // SQLite run: `this.changes` diz quantas linhas foram afetadas. Mas com promisify, 
-                // para ser seguro sem depender do `this`, checamos separadamente ou apenas 
-                // assumimos que passou (já que IGNORE engole o erro).
-                insertedCount++;
-            } catch (innerErr) {
-                ignoredCount++;
-            }
-        }
-
-        await db.runAsync('COMMIT');
-
+        const ignoredCount = validos.length - insertedCount;
         res.json({
-            message: `Lote processado. Registros inseridos/atualizados: ${insertedCount}. Com erro ou ignorados: ${ignoredCount}.`,
+            message: `Lote processado. Inseridos: ${insertedCount}. Já existentes (ignorados): ${ignoredCount}. Inválidos: ${errors.length}.`,
             insertedCount,
-            ignoredCount
+            ignoredCount,
+            invalidCount: errors.length,
+            errors
         });
     } catch (err) {
-        await db.runAsync('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        console.error('[USERS] Erro no cadastro em lote:', err);
+        if (err.code === '23505' || String(err.message).includes('UNIQUE')) {
+            return res.status(409).json({ error: 'Matrícula já existe no sistema.' });
+        }
+        res.status(500).json({
+            error: 'Falha ao processar o lote. Nada foi salvo (transação revertida) — tente novamente.'
+        });
     }
 });
 
@@ -160,40 +202,58 @@ router.get('/contratos-ativos', requireAuth, async (req, res) => {
 
 // ── Exclusão em Lote (Apenas Operacional) ─────────────────
 router.delete('/batch', requireAdm, async (req, res) => {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'Nenhum ID fornecido.' });
+    const rawIds = req.body?.ids;
+    if (!Array.isArray(rawIds) || rawIds.length === 0) {
+        return res.status(400).json({ error: 'Nenhum ID fornecido.' });
+    }
+    if (rawIds.length > MAX_LOTE) {
+        return res.status(400).json({ error: `Limite de ${MAX_LOTE} registros por exclusão.` });
+    }
+
+    const ids = rawIds.map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (ids.length === 0) return res.status(400).json({ error: 'IDs inválidos.' });
+
+    const DEL_CHUNK = 500; // < 999 params do SQLite
 
     try {
-        // Verifica se algum dos IDs é ADM
-        const placeholders = ids.map(() => '?').join(',');
-        const users = await db.allAsync(`SELECT id, perfil FROM usuarios WHERE id IN (${placeholders})`, ids);
-        
-        if (users.some(u => u.perfil === 'adm')) {
-            return res.status(403).json({ error: 'Administradores não podem ser excluídos em lote.' });
+        // Verifica se algum dos IDs é ADM (em chunks para respeitar o limite de parâmetros)
+        for (let i = 0; i < ids.length; i += DEL_CHUNK) {
+            const parte = ids.slice(i, i + DEL_CHUNK);
+            const ph = parte.map(() => '?').join(',');
+            const users = await db.allAsync(`SELECT id, perfil FROM usuarios WHERE id IN (${ph})`, parte);
+            if (users.some(u => u.perfil === 'adm')) {
+                return res.status(403).json({ error: 'Administradores não podem ser excluídos em lote.' });
+            }
         }
 
         let apagados = 0;
         let inativados = 0;
 
-        await db.runAsync('BEGIN TRANSACTION');
-        for (const id of ids) {
+        for (let i = 0; i < ids.length; i += DEL_CHUNK) {
+            const parte = ids.slice(i, i + DEL_CHUNK);
+            const ph = parte.map(() => '?').join(',');
             try {
-                // Tenta apagar definitivamente
-                await db.runAsync(`DELETE FROM usuarios WHERE id = ?`, [id]);
-                apagados++;
-            } catch (err) {
-                // Se falhar (ex: FOREIGN KEY constraint falhou devido a um histórico de N3)
-                // Fazemos o Soft Delete (inativação)
-                await db.runAsync(`UPDATE usuarios SET ativo = 0 WHERE id = ?`, [id]);
-                inativados++;
+                // Exclusão em massa: uma única query por chunk (falha inteira se alguma FK bloquear)
+                const r = await db.runAsync(`DELETE FROM usuarios WHERE id IN (${ph})`, parte);
+                apagados += r.changes || 0;
+            } catch (fkErr) {
+                // Fallback linha a linha: DELETE que falhar por FK vira Soft Delete (preserva histórico)
+                for (const id of parte) {
+                    try {
+                        const r = await db.runAsync(`DELETE FROM usuarios WHERE id = ?`, [id]);
+                        if (r.changes) apagados++;
+                    } catch (err) {
+                        await db.runAsync(`UPDATE usuarios SET ativo = 0 WHERE id = ?`, [id]);
+                        inativados++;
+                    }
+                }
             }
         }
-        await db.runAsync('COMMIT');
 
         res.json({ message: `Lote excluído. Removidos: ${apagados}. Inativados (p/ manter histórico): ${inativados}.` });
     } catch (err) {
-        await db.runAsync('ROLLBACK');
-        res.status(500).json({ error: err.message });
+        console.error('[USERS] Erro na exclusão em lote:', err);
+        res.status(500).json({ error: 'Falha ao excluir o lote. Tente novamente.' });
     }
 });
 

@@ -17,8 +17,9 @@ app.set('trust proxy', 1);
 //  Middlewares globais
 // ────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Limite ampliado: lotes de cadastro em lote passam de 100kb (padrão) e recebiam 413
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 let sessionStore;
 if (process.env.DATABASE_URL) {
@@ -157,6 +158,22 @@ app.get('*', (req, res) => {
     } else {
         res.status(404).json({ error: 'Rota não encontrada.' });
     }
+});
+
+// ────────────────────────────────────────────────
+//  Error handler em JSON (o default do Express devolve HTML,
+//  que o frontend via como "Erro 400" genérico)
+// ────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ error: 'Payload muito grande. Divida o lote em partes menores.' });
+    }
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ error: 'Corpo da requisição JSON inválido.' });
+    }
+    console.error('[SERVER] Erro não tratado:', err);
+    if (res.headersSent) return next(err);
+    res.status(err.status || 500).json({ error: 'Erro interno do servidor.' });
 });
 
 // ────────────────────────────────────────────────
