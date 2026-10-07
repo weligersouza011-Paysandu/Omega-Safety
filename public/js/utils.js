@@ -130,11 +130,35 @@ function clearSession() {
 
 // ── Proteção de página (redireciona se não logado) ───
 async function requireLogin(role = null) {
+    let cachedUser = getSession();
+
+    // Verificação rápida (Navegação sub-3s)
+    if (cachedUser) {
+        if (role) {
+            const isMaster = cachedUser.is_master === 1;
+            const roleOk = cachedUser.perfil === role || (role === 'adm' && isMaster);
+            if (!roleOk) {
+                window.location.href = '/dashboard';
+                return null;
+            }
+        }
+        
+        // Revalidação assíncrona em background (não bloqueia UI)
+        api.get('/auth/me').then(user => {
+            saveSession(user);
+        }).catch(() => {
+            clearSession();
+            window.location.href = '/';
+        });
+
+        return cachedUser;
+    }
+
+    // Se não há cache, faz o fetch bloqueante normal
     try {
         const user = await api.get('/auth/me');
         saveSession(user);
         if (role) {
-            // Master tem acesso a tudo que ADM tem acesso
             const isMaster = user.is_master === 1;
             const roleOk = user.perfil === role || (role === 'adm' && isMaster);
             if (!roleOk) {
@@ -149,6 +173,7 @@ async function requireLogin(role = null) {
         return null;
     }
 }
+
 
 // ── Construir sidebar HTML ───────────────────────────
 function buildSidebar(user, activePage) {

@@ -412,6 +412,45 @@ async function initDB() {
             }
         } catch(e){}
 
+        // ---- ÍNDICES PARA ALTA PERFORMANCE ----
+        const indices = [
+            // Treinamentos
+            "CREATE INDEX IF NOT EXISTS idx_treinamentos_matricula ON treinamentos(matricula);",
+            "CREATE INDEX IF NOT EXISTS idx_treinamentos_vencimento ON treinamentos(data_vencimento);",
+            "CREATE INDEX IF NOT EXISTS idx_treinamentos_nome ON treinamentos(nome);",
+            
+            // N3 Registros
+            "CREATE INDEX IF NOT EXISTS idx_n3_contrato ON n3_registros(contrato);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_matricula_obs ON n3_registros(matricula_observador);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_nivel ON n3_registros(nivel);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_data ON n3_registros(data);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_status ON n3_registros(status);",
+            
+            // VPS Canteiros
+            "CREATE INDEX IF NOT EXISTS idx_vps_canteiros_contrato ON vps_canteiros(contrato);",
+            "CREATE INDEX IF NOT EXISTS idx_vps_canteiros_status ON vps_canteiros(status);",
+            
+            // VPS Histórico e Pendências
+            "CREATE INDEX IF NOT EXISTS idx_vps_hist_canteiro ON vps_historico(canteiro_id);",
+            "CREATE INDEX IF NOT EXISTS idx_vps_hist_tipo_card ON vps_historico(tipo_card);",
+            "CREATE INDEX IF NOT EXISTS idx_vps_pend_canteiro ON vps_pendencias(canteiro_id);",
+            "CREATE INDEX IF NOT EXISTS idx_vps_pend_status ON vps_pendencias(status);",
+            
+            // Inspeções e Cadernos
+            "CREATE INDEX IF NOT EXISTS idx_inspecoes_matricula ON inspecoes_avulsas(matricula);",
+            "CREATE INDEX IF NOT EXISTS idx_cad_respostas_matricula ON caderno_respostas(matricula);",
+            "CREATE INDEX IF NOT EXISTS idx_cad_respostas_contrato ON caderno_respostas(contrato);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_historico_n3_id ON n3_historico(n3_id);"
+        ];
+
+        for (const idxQuery of indices) {
+            try {
+                await db.execAsync(idxQuery);
+            } catch (err) {
+                console.warn(`[DB] Aviso ao criar índice: ${err.message}`);
+            }
+        }
+
     console.log('[DB] Schema de tabelas inicializado e pronto.');
 
     // Seed: garante que o ADM padrão existe
