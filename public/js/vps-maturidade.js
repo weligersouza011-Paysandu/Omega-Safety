@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. Verificar autenticação e permissão
     const user = await requireLogin('adm');
     if (!user) return;
-    window.__currentUser = user; // Compartilhado com funções auxiliares (carregarContratos, etc.)
+    window.__currentUser = user; // Compartilhado com funções auxiliares
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'vps');
     initLogout();
@@ -139,13 +139,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupMaturidadePreviews();
     setupAllEventListeners();
 
-    // 2. Carregar dados iniciais em paralelo (Performance rápida)
+    // 2. Primeiro carrega contratos (define o filtro inicial e trava se não-Master)
+    //    Depois carrega o restante JÁ com o contrato correto pré-selecionado
     try {
+        await carregarLiderancas();
+        await carregarContratos(); // <-- define #filtro-canteiro-contrato
         await Promise.all([
-            carregarLiderancas(),
-            carregarContratos(),
-            carregarEstatisticas(),
-            carregarCanteiros(),
+            carregarEstatisticas(),   // já lê o valor correto do select
+            carregarCanteiros(),      // já filtra pelo contrato
             carregarPendenciasGerais(),
             carregarTimeline('')
         ]);
@@ -227,11 +228,15 @@ function setupAllEventListeners() {
         });
     }
 
-    // Filtros
+    // Filtros de canteiro por contrato
     const selFiltroCanteiro = document.getElementById('filtro-canteiro-contrato');
     if (selFiltroCanteiro) {
         selFiltroCanteiro.addEventListener('change', async () => {
-            await carregarCanteiros();
+            // Atualiza todos os elementos dependentes do contrato em paralelo
+            await Promise.all([
+                carregarEstatisticas(),
+                carregarCanteiros()
+            ]);
         });
     }
 
@@ -499,9 +504,16 @@ async function carregarContratos() {
     }
 }
 
+// Helper: lê o contrato actualmente selecionado no filtro principal
+function getContratoFiltrado() {
+    return document.getElementById('filtro-canteiro-contrato')?.value || '';
+}
+
 async function carregarEstatisticas() {
     try {
-        const stats = await api.get('/vps/stats');
+        const contrato = getContratoFiltrado();
+        const qs = contrato ? `?contrato=${encodeURIComponent(contrato)}` : '';
+        const stats = await api.get(`/vps/stats${qs}`);
         
         const container = document.getElementById('stats-grid-container');
         if (container) {

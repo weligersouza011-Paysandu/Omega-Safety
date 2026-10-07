@@ -237,7 +237,11 @@ router.get('/liderancas', requireAuth, async (req, res) => {
 // GET /api/vps/stats - Estatísticas para o painel (Apenas ADM)
 router.get('/stats', requireAdm, requireContractScope, async (req, res) => {
     try {
-        const contrato = req.isMaster ? null : req.contratoScope;
+        // Para ADMs comuns: usa o contrato fixo da sessão.
+        // Para Masters: usa ?contrato da query (se enviado); sem parâmetro = todos os contratos.
+        const contrato = req.isMaster
+            ? (req.query.contrato && req.query.contrato.trim() !== '' ? req.query.contrato.trim() : null)
+            : req.contratoScope;
         const whereContratoAnd = contrato ? " AND contrato = ?" : "";
         const cParams = contrato ? [contrato] : [];
 
