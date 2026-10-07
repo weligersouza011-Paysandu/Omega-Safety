@@ -331,6 +331,9 @@ async function initDB() {
         CREATE INDEX IF NOT EXISTS idx_cadernos_inspecao_status    ON cadernos_inspecao(status);
         CREATE INDEX IF NOT EXISTS idx_usuarios_contrato           ON usuarios(contrato);
         CREATE INDEX IF NOT EXISTS idx_usuarios_perfil             ON usuarios(perfil);
+        CREATE INDEX IF NOT EXISTS idx_treinamentos_matricula      ON treinamentos(matricula);
+        CREATE INDEX IF NOT EXISTS idx_treinamentos_vencimento     ON treinamentos(data_vencimento);
+        CREATE INDEX IF NOT EXISTS idx_treinamentos_nome           ON treinamentos(nome);
         `;
 
         await db.execAsync(postgresSchema);
@@ -366,6 +369,9 @@ async function initDB() {
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato ON caderno_respostas(contrato)'); } catch(e){}
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_usuarios_contrato ON usuarios(contrato)'); } catch(e){}
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_usuarios_perfil ON usuarios(perfil)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_treinamentos_matricula ON treinamentos(matricula)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_treinamentos_vencimento ON treinamentos(data_vencimento)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_treinamentos_nome ON treinamentos(nome)'); } catch(e){}
 
     }
 

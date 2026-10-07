@@ -186,30 +186,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// ── Carregar dados ──
-async function carregarTreinamentos() {
+// ── Estado de paginação ──
+let _paginaAtual = 1;
+let _totalRegistros = 0;
+let _limitePorPagina = 100;
+
+// ── Carregar dados (suporta resposta paginada e array legado) ──
+async function carregarTreinamentos(page) {
+    page = page || _paginaAtual;
     exibirLoading(true);
     limparSelecao();
     try {
-        const data = await api.get('/treinamentos');
-        if (Array.isArray(data)) {
-            todosTreinamentos = data;
-            const resumo = {
-                vencidos: data.filter(r => r.situacao === 'vencido' || r.status_vencimento === 'Vencido').length,
-                criticos: data.filter(r => r.status_vencimento === 'Crítico').length,
-                atencao: data.filter(r => r.situacao === 'alerta' || r.status_vencimento === 'Atenção').length,
-                em_dia: data.filter(r => r.situacao === 'ok' || r.status_vencimento === 'Em Dia').length
-            };
-            atualizarCardsResumo(resumo);
-            popularDropdownFuncoes(todosTreinamentos);
-            aplicarFiltros();
+        const resp = await api.get(`/treinamentos?page=${page}&limit=${_limitePorPagina}`);
+
+        // Suporte a resposta paginada { data, total } ou array legado
+        let lista = [];
+        if (resp && Array.isArray(resp.data)) {
+            lista = resp.data;
+            _totalRegistros = resp.total || lista.length;
+            _paginaAtual   = resp.page  || page;
+        } else if (Array.isArray(resp)) {
+            lista = resp;
+            _totalRegistros = lista.length;
         }
+
+        todosTreinamentos = lista;
+
+        const resumo = {
+            vencidos: lista.filter(r => r.situacao === 'vencido'  || r.status_vencimento === 'Vencido').length,
+            criticos: lista.filter(r => r.status_vencimento === 'Crítico').length,
+            atencao:  lista.filter(r => r.situacao === 'alerta'   || r.status_vencimento === 'Atenção').length,
+            em_dia:   lista.filter(r => r.situacao === 'ok'       || r.status_vencimento === 'Em Dia').length
+        };
+        atualizarCardsResumo(resumo);
+        popularDropdownFuncoes(todosTreinamentos);
+        aplicarFiltros();
+        renderizarPaginacao(resp && resp.pages ? resp.pages : 1, _paginaAtual);
     } catch (e) {
         console.error(e);
         mostrarStateVazio(true, 'Erro ao carregar treinamentos.');
     } finally {
         exibirLoading(false);
     }
+}
+
+function renderizarPaginacao(totalPaginas, paginaAtual) {
+    let el = document.getElementById('paginacao-trein');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'paginacao-trein';
+        el.style.cssText = 'display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 0;flex-wrap:wrap;';
+        const wrap = document.querySelector('.trein-table-wrap');
+        if (wrap) wrap.appendChild(el);
+    }
+    if (totalPaginas <= 1) { el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    el.innerHTML = `
+        <span style="font-size:12px;color:var(--color-text-secondary);">
+            Total: <strong>${_totalRegistros}</strong> registros
+        </span>
+        <button onclick="carregarTreinamentos(${paginaAtual - 1})" ${paginaAtual <= 1 ? 'disabled' : ''}
+            style="padding:5px 10px;border-radius:6px;border:1px solid var(--color-border);background:var(--color-bg-secondary);cursor:pointer;">
+            ‹ Anterior
+        </button>
+        <span style="font-size:13px;">Página <strong>${paginaAtual}</strong> de <strong>${totalPaginas}</strong></span>
+        <button onclick="carregarTreinamentos(${paginaAtual + 1})" ${paginaAtual >= totalPaginas ? 'disabled' : ''}
+            style="padding:5px 10px;border-radius:6px;border:1px solid var(--color-border);background:var(--color-bg-secondary);cursor:pointer;">
+            Próxima ›
+        </button>`;
 }
 
 function atualizarCardsResumo(r) {

@@ -108,7 +108,7 @@ router.get('/exportar', requireAuth, async (req, res) => {
 
         let csv = 'id,matricula,nome_colaborador,funcao,nome_treinamento,data_realizacao,data_vencimento\n';
         rows.forEach(r => {
-            const nomeColab = (r.nome_colaborador || r.nome || '').replace(/"/g, '""');
+            const nomeColab = (r.nome || r.nome_colaborador || '').replace(/"/g, '""');
             const func = (r.funcao || '').replace(/"/g, '""');
             const trein = (r.nome_treinamento || '').replace(/"/g, '""');
             csv += `"${r.id}","${r.matricula}","${nomeColab}","${func}","${trein}","${r.data_realizacao || ''}","${r.data_vencimento || ''}"\n`;
@@ -212,7 +212,7 @@ router.post('/importar', requireAuth, upload.single('file'), async (req, res) =>
                 await client.query('BEGIN');
                 for (const item of validos) {
                     await client.query(
-                        `INSERT INTO treinamentos (matricula, nome_colaborador, funcao, nome_treinamento, data_realizacao, data_vencimento)
+                        `INSERT INTO treinamentos (matricula, nome, funcao, nome_treinamento, data_realizacao, data_vencimento)
                          VALUES ($1, $2, $3, $4, $5, $6)`,
                         [item.matricula, item.nome_colaborador, item.funcao, item.nome_treinamento, item.data_realizacao, item.data_vencimento]
                     );
@@ -258,30 +258,92 @@ router.post('/importar', requireAuth, upload.single('file'), async (req, res) =>
     }
 });
 
-// GET /api/treinamentos
+// GET /api/treinamentos (com paginação e busca)
 router.get('/', requireAuth, async (req, res) => {
     const { perfil, matricula: matLogado } = req.session.usuario || {};
-    const matFilter = req.query.matricula;
+    const matFilter  = req.query.matricula;
+    const busca      = req.query.busca     || '';
+    const situFilter = req.query.situacao  || '';
+    const page       = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit      = Math.min(200, parseInt(req.query.limit) || 50);
+    const offset     = (page - 1) * limit;
 
-    const situacaoExpr = `CASE
-        WHEN date(t.data_vencimento) < date('now','localtime') THEN 'vencido'
-        WHEN date(t.data_vencimento) <= date('now','localtime','+30 days') THEN 'alerta'
-        ELSE 'ok'
-    END AS situacao`;
+    // Expressão de situação compatível com SQLite e PostgreSQL
+    const isPostgres = !!db.pool;
+    const situacaoExpr = isPostgres
+        ? `CASE
+            WHEN t.data_vencimento::date < CURRENT_DATE THEN 'vencido'
+            WHEN t.data_vencimento::date <= CURRENT_DATE + INTERVAL '30 days' THEN 'alerta'
+            ELSE 'ok'
+           END AS situacao`
+        : `CASE
+            WHEN date(t.data_vencimento) < date('now','localtime') THEN 'vencido'
+            WHEN date(t.data_vencimento) <= date('now','localtime','+30 days') THEN 'alerta'
+            ELSE 'ok'
+           END AS situacao`;
+
+    // Determina se é admin/master (acesso total)
+    const isAdmin = (perfil === 'adm' || perfil === 'master');
 
     try {
-        let rows;
-        if (perfil === 'adm' && !matFilter) {
-            rows = await db.allAsync(`SELECT t.*, ${situacaoExpr} FROM treinamentos t ORDER BY t.data_vencimento ASC`);
-        } else {
-            const mat = matFilter || matLogado;
-            rows = await db.allAsync(
-                `SELECT t.*, ${situacaoExpr} FROM treinamentos t WHERE t.matricula = ? ORDER BY t.data_vencimento ASC`,
-                [mat]
-            );
+        const conditions = [];
+        const params     = [];
+        let   paramIdx   = 1; // Para PostgreSQL ($1, $2...)
+
+        // Filtro por matrícula
+        const matTarget = matFilter || (!isAdmin ? matLogado : null);
+        if (matTarget) {
+            conditions.push(isPostgres ? `t.matricula = $${paramIdx++}` : `t.matricula = ?`);
+            params.push(matTarget);
         }
-        res.json(rows);
+
+        // Busca textual
+        if (busca) {
+            const like = `%${busca}%`;
+            if (isPostgres) {
+                conditions.push(`(t.nome ILIKE $${paramIdx} OR t.nome_treinamento ILIKE $${paramIdx + 1} OR t.matricula ILIKE $${paramIdx + 2})`);
+                paramIdx += 3;
+            } else {
+                conditions.push(`(t.nome LIKE ? OR t.nome_treinamento LIKE ? OR t.matricula LIKE ?)`);
+            }
+            params.push(like, like, like);
+        }
+
+        // Filtro de situação
+        if (situFilter) {
+            const situSQL = isPostgres
+                ? `CASE WHEN t.data_vencimento::date < CURRENT_DATE THEN 'vencido' WHEN t.data_vencimento::date <= CURRENT_DATE + INTERVAL '30 days' THEN 'alerta' ELSE 'ok' END`
+                : `CASE WHEN date(t.data_vencimento) < date('now','localtime') THEN 'vencido' WHEN date(t.data_vencimento) <= date('now','localtime','+30 days') THEN 'alerta' ELSE 'ok' END`;
+            conditions.push(isPostgres ? `(${situSQL}) = $${paramIdx++}` : `(${situSQL}) = ?`);
+            params.push(situFilter);
+        }
+
+        const whereSQL = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // Conta total para paginação
+        const countSQL = `SELECT COUNT(*) AS total FROM treinamentos t ${whereSQL}`;
+        const countRow = await db.allAsync(countSQL, params);
+        const total    = parseInt((countRow[0] || {}).total || (countRow[0] || {}).count || 0);
+
+        // Query principal com LIMIT/OFFSET
+        const limitClause = isPostgres
+            ? `LIMIT $${paramIdx++} OFFSET $${paramIdx++}`
+            : `LIMIT ? OFFSET ?`;
+        const dataSQL = `SELECT t.*, ${situacaoExpr} FROM treinamentos t ${whereSQL} ORDER BY t.data_vencimento ASC ${limitClause}`;
+        const rows    = await db.allAsync(dataSQL, [...params, limit, offset]);
+
+        // Normaliza campo: retorna sempre nome_colaborador para o frontend
+        const normalized = rows.map(r => ({ ...r, nome_colaborador: r.nome_colaborador || r.nome }));
+
+        res.json({
+            data:  normalized,
+            total,
+            page,
+            limit,
+            pages: Math.ceil(total / limit)
+        });
     } catch(err) {
+        console.error('[ERRO GET TREINAMENTOS]:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -293,13 +355,15 @@ router.post('/', requireAuth, async (req, res) => {
     if (!matricula || !nomeFinal || !nome_treinamento)
         return res.status(400).json({ error: 'Campos obrigatórios: matricula, nome_colaborador, nome_treinamento.' });
     try {
+        // Usa coluna 'nome' (nome real da coluna na tabela)
         const result = await db.runAsync(
-            `INSERT INTO treinamentos (matricula, nome_colaborador, funcao, nome_treinamento, data_realizacao, data_vencimento)
+            `INSERT INTO treinamentos (matricula, nome, funcao, nome_treinamento, data_realizacao, data_vencimento)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [matricula, nomeFinal, funcao||null, nome_treinamento, data_realizacao||null, data_vencimento||null]
         );
-        res.status(201).json({ id: result.lastID, message: 'Treinamento registrado.' });
+        res.status(201).json({ id: result.lastID || result.rows?.[0]?.id, message: 'Treinamento registrado.' });
     } catch(err) {
+        console.error('[ERRO POST TREINAMENTO]:', err);
         res.status(500).json({ error: err.message });
     }
 });
