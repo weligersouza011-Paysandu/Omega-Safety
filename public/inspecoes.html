@@ -35,6 +35,15 @@
 
             <!-- ════════ ABA 1: REGISTROS / ROTINA ════════ -->
             <div id="tab-registros" class="n3-tab-content active">
+
+                <!-- Filtro de Contrato (ADM / Master) -->
+                <div id="contract-filter-bar-insp" class="n3-contract-filter" style="display:none; margin-bottom: var(--space-md);">
+                    <label for="select-contrato-insp" class="n3-contract-filter__label">📑 Contrato:</label>
+                    <select id="select-contrato-insp" class="form-select n3-contract-filter__select">
+                        <option value="">Todos os Contratos</option>
+                    </select>
+                </div>
+
                 <div class="insp-registros-header">
                     <div>
                         <h3 class="insp-section-title" style="margin-top:0;border:none;padding:0;">Inspeções de Rotina</h3>

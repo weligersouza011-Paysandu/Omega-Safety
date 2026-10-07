@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database/db');
-const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdm, requireContractScope } = require('../middleware/auth.middleware');
 const crypto = require('crypto');
 const multer = require('multer');
 const { uploadBuffer, removeMedia } = require('../config/cloudinary');
@@ -93,9 +93,12 @@ function calcularStatusCardCanteiro(historyList) {
 }
 
 // GET /api/vps/canteiros - Listar canteiros (com status acumulado do histórico de cards)
-router.get('/canteiros', requireAuth, async (req, res) => {
+router.get('/canteiros', requireAuth, requireContractScope, async (req, res) => {
     try {
-        const { status, contrato } = req.query;
+        const { status } = req.query;
+        // Para Master: usa ?contrato da query; para ADM comum / Operacional: usa contrato do usuário
+        const contrato = req.isMaster ? req.query.contrato : req.contratoScope;
+
         let sql = `SELECT c.* FROM vps_canteiros c`;
         let params = [];
         let conditions = [];
@@ -232,24 +235,32 @@ router.get('/liderancas', requireAuth, async (req, res) => {
 });
 
 // GET /api/vps/stats - Estatísticas para o painel (Apenas ADM)
-router.get('/stats', requireAdm, async (req, res) => {
+router.get('/stats', requireAdm, requireContractScope, async (req, res) => {
     try {
-        const totalAndamento = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Em andamento'");
-        const totalConcluidas = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Concluída'");
-        const totalParalisadas = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Paralisada'");
+        const contrato = req.isMaster ? null : req.contratoScope;
+        const whereContratoAnd = contrato ? " AND contrato = ?" : "";
+        const cParams = contrato ? [contrato] : [];
+
+        const totalAndamento = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Em andamento'${whereContratoAnd}`, cParams);
+        const totalConcluidas = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Concluída'${whereContratoAnd}`, cParams);
+        const totalParalisadas = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE status = 'Paralisada'${whereContratoAnd}`, cParams);
         
         // Maturidades 0 a 4 ESTRITAMENTE para obras com status 'Em andamento'
-        const mat0 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 0 AND status = 'Em andamento'");
-        const mat1 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 1 AND status = 'Em andamento'");
-        const mat2 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 2 AND status = 'Em andamento'");
-        const mat3 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 3 AND status = 'Em andamento'");
-        const mat4 = await db.getAsync("SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 4 AND status = 'Em andamento'");
+        const mat0 = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 0 AND status = 'Em andamento'${whereContratoAnd}`, cParams);
+        const mat1 = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 1 AND status = 'Em andamento'${whereContratoAnd}`, cParams);
+        const mat2 = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 2 AND status = 'Em andamento'${whereContratoAnd}`, cParams);
+        const mat3 = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 3 AND status = 'Em andamento'${whereContratoAnd}`, cParams);
+        const mat4 = await db.getAsync(`SELECT COUNT(*) as count FROM vps_canteiros WHERE maturidade = 4 AND status = 'Em andamento'${whereContratoAnd}`, cParams);
 
         // Contagem consolidada do histórico de cards emitidos
-        const cardsDiamante = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Diamante'");
-        const cardsVerde = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Verde'");
-        const cardsAmarelo = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Amarelo'");
-        const cardsVermelho = await db.getAsync("SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = 'Vermelho'");
+        const histSql = contrato 
+            ? "SELECT COUNT(*) as count FROM vps_historico h JOIN vps_canteiros c ON h.canteiro_id = c.id WHERE h.tipo_card = ? AND c.contrato = ?"
+            : "SELECT COUNT(*) as count FROM vps_historico WHERE tipo_card = ?";
+
+        const cardsDiamante = await db.getAsync(histSql, contrato ? ['Diamante', contrato] : ['Diamante']);
+        const cardsVerde = await db.getAsync(histSql, contrato ? ['Verde', contrato] : ['Verde']);
+        const cardsAmarelo = await db.getAsync(histSql, contrato ? ['Amarelo', contrato] : ['Amarelo']);
+        const cardsVermelho = await db.getAsync(histSql, contrato ? ['Vermelho', contrato] : ['Vermelho']);
 
         res.json({
             emAndamento: totalAndamento ? totalAndamento.count : 0,

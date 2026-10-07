@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS n3_registros (
     observacoes_adm        TEXT,   -- Campo para o ADM ao validar
     validado_por           TEXT,   -- Matrícula do ADM que validou
     validado_em            DATETIME,
+    contrato               TEXT,   -- Snapshot permanente do contrato no momento da criação
     criado_em              DATETIME DEFAULT (datetime('now','localtime'))
 );
 
@@ -101,6 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_treinamentos_matricula ON treinamentos(matricula)
 CREATE INDEX IF NOT EXISTS idx_n3_matricula           ON n3_registros(matricula_observador);
 CREATE INDEX IF NOT EXISTS idx_n3_status              ON n3_registros(status);
 CREATE INDEX IF NOT EXISTS idx_n3_data                ON n3_registros(data);
+CREATE INDEX IF NOT EXISTS idx_n3_contrato            ON n3_registros(contrato);
 CREATE INDEX IF NOT EXISTS idx_inspecoes_matricula    ON inspecoes_avulsas(matricula);
 CREATE INDEX IF NOT EXISTS idx_inspecoes_data         ON inspecoes_avulsas(data_inspecao);
 

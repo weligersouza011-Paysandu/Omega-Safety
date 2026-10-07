@@ -8,11 +8,17 @@ let allN3Data       = [];
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = await requireLogin();
     if (!currentUser) return;
+    window.__currentUser = currentUser; // Compartilhado com n3-dashboard.js e outros co-carregados
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(currentUser, 'n3');
     initLogout();
 
-    const isAdm = currentUser.perfil === 'adm';
+    if (currentUser.contrato) {
+        currentContrato = String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim();
+    }
+
+    const isMaster = currentUser.is_master === 1;
+    const isAdm = isMaster || currentUser.perfil === 'adm';
 
     // ── Mostrar abas apenas para ADM ──
     if (isAdm) {
@@ -81,35 +87,78 @@ async function loadContractOptions() {
         const selectList = document.getElementById('select-contrato-n3');
         const selectDash = document.getElementById('dash3-contrato') || document.getElementById('select-contrato-dashboard');
 
-        contratos.forEach(c => {
-            const cleanCode = String(c).replace(/[^0-9a-zA-Z]/g, '') || String(c).trim();
-            if (!cleanCode) return;
-            
-            if (selectList && !selectList.querySelector(`option[value="${cleanCode}"]`)) {
-                selectList.appendChild(new Option(`Contrato ${cleanCode}`, cleanCode));
-            }
-            if (selectDash && !selectDash.querySelector(`option[value="${cleanCode}"]`)) {
-                selectDash.appendChild(new Option(`Contrato ${cleanCode}`, cleanCode));
-            }
-        });
+        const userC = currentUser && currentUser.contrato 
+            ? (String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim())
+            : '';
 
-        // Pré-seleciona com o contrato do ADM logado
-        if (currentUser.contrato) {
-            const userC = String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim();
-            if (selectList) selectList.value = userC;
-            currentContrato = userC;
-            if (selectDash) selectDash.value = userC;
+        const isMaster = currentUser && currentUser.is_master === 1;
+
+        const contractSet = new Set();
+        if (Array.isArray(contratos)) {
+            contratos.forEach(c => {
+                const cleanCode = String(c).replace(/[^0-9a-zA-Z]/g, '') || String(c).trim();
+                if (cleanCode) contractSet.add(cleanCode);
+            });
         }
 
-        // Evento de alteração
-        selectList.addEventListener('change', () => {
-            currentContrato = selectList.value;
-            loadN3();
-        });
+        if (userC) {
+            contractSet.add(userC);
+        }
 
-        if (selectDash) {
+        function populateSelect(selectEl) {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            
+            if (isMaster) {
+                const optTodos = document.createElement('option');
+                optTodos.value = '';
+                optTodos.textContent = 'Todos os Contratos';
+                selectEl.appendChild(optTodos);
+            }
+
+            Array.from(contractSet).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})).forEach(code => {
+                const opt = document.createElement('option');
+                opt.value = code;
+                opt.textContent = `Contrato ${code}`;
+                selectEl.appendChild(opt);
+            });
+
+            if (userC) {
+                selectEl.value = userC;
+            } else if (isMaster) {
+                selectEl.value = '';
+            }
+
+            if (!isMaster) {
+                selectEl.disabled = true;
+                selectEl.title = 'Restrito ao seu contrato';
+                selectEl.style.cursor = 'not-allowed';
+            } else {
+                selectEl.disabled = false;
+            }
+        }
+
+        populateSelect(selectList);
+        populateSelect(selectDash);
+
+        if (userC) {
+            currentContrato = userC;
+        } else if (selectList) {
+            currentContrato = selectList.value;
+        }
+
+        if (selectList && !selectList.dataset.listenerAttached) {
+            selectList.dataset.listenerAttached = 'true';
+            selectList.addEventListener('change', () => {
+                currentContrato = selectList.value;
+                loadN3();
+            });
+        }
+
+        if (selectDash && !selectDash.dataset.listenerAttached) {
+            selectDash.dataset.listenerAttached = 'true';
             selectDash.addEventListener('change', () => {
-                loadDashboardN3();
+                if (typeof loadDashboardN3 === 'function') loadDashboardN3();
             });
         }
 
@@ -152,13 +201,17 @@ async function loadN3() {
         document.getElementById('total-label').textContent = `${data.total} registro(s)`;
 
         if (!data.data.length) {
+            const isOperacional = currentUser && currentUser.perfil === 'operacional';
+            const emptyDesc = currentFilter
+                ? `Nenhum registro com nível "${currentFilter}".`
+                : isOperacional
+                    ? 'Nenhum N3 encontrado para o seu contrato. Registe uma ocorrência para que apareça aqui.'
+                    : 'Nenhum registro N3 encontrado para os filtros selecionados.';
             container.innerHTML = `<div>
                 <div class="empty-state">
                     <div class="empty-state__icon">📭</div>
                     <div class="empty-state__title">Nenhum N3 encontrado</div>
-                    <div class="empty-state__desc">
-                        ${currentFilter ? `Nenhum registro com nível "${currentFilter}".` : 'Seja o primeiro a registrar um N3!'}
-                    </div>
+                    <div class="empty-state__desc">${emptyDesc}</div>
                 </div>
             </div>`;
             return;

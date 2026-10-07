@@ -1,6 +1,7 @@
 // public/js/admin-usuarios.js
 
 let parsedUsers = [];
+let currentLoggedUser = null; // usuário logado (para verificar se é Master)
 
 const MAX_LINHAS_LOTE = 2000; // limite por lote (igual ao backend)
 const LOTE_CHUNK       = 200;  // registros por requisição (chunking)
@@ -13,9 +14,11 @@ function escapeHtml(value) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Apenas ADM pode acessar
+    // Apenas ADM (ou Master) pode acessar
     const user = await requireLogin('adm');
     if (!user) return;
+
+    currentLoggedUser = user; // guarda para uso nos renderizadores
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'usuarios');
     initLogout();
@@ -45,8 +48,13 @@ function setupUserList() {
             renderTables();
         } catch (err) {
             tbodyOp.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-red-primary);">Erro ao carregar usuários: ${err.message}</td></tr>`;
-            tbodyAdm.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--color-red-primary);">Erro ao carregar usuários: ${err.message}</td></tr>`;
+            tbodyAdm.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--color-red-primary);">Erro ao carregar usuários: ${err.message}</td></tr>`;
         }
+    }
+
+    // Verifica se o utilizador logado é Master
+    function isCurrentUserMaster() {
+        return currentLoggedUser && currentLoggedUser.is_master === 1;
     }
 
     // Renderiza as tabelas
@@ -97,14 +105,38 @@ function setupUserList() {
             `).join('');
         }
 
-        // ADMs
+        // ADMs — com destaque visual para Masters
         if (!adms.length) {
-            tbodyAdm.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:var(--space-xl);">Nenhum administrador encontrado.</td></tr>`;
+            tbodyAdm.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:var(--space-xl);">Nenhum administrador encontrado.</td></tr>`;
         } else {
             const defaultAvatar = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ccc' d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
+            const viewerIsMaster = isCurrentUserMaster();
             
-            tbodyAdm.innerHTML = adms.map(u => `
-                <tr id="tr-${u.id}">
+            tbodyAdm.innerHTML = adms.map(u => {
+                // Estilização especial para Masters: fundo azul claro elegante
+                const masterStyle = u.is_master
+                    ? 'background: linear-gradient(90deg, rgba(37,99,235,0.08), rgba(37,99,235,0.04)); border-left: 3px solid #2563eb;'
+                    : '';
+                
+                // Badge Master na coluna
+                const masterBadge = u.is_master
+                    ? `<span style="display:inline-block; background:linear-gradient(135deg,#1e3a5f,#2563eb); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; letter-spacing:0.05em;">⭐ Master</span>`
+                    : `<span style="color:var(--color-text-secondary); font-size:12px;">—</span>`;
+
+                // Toggle Master: visível apenas para o utilizador Master logado (e não sobre si próprio)
+                const canToggleMaster = viewerIsMaster;
+                const isSelf = currentLoggedUser && u.id === currentLoggedUser.id;
+                let masterToggleBtn = '';
+                if (canToggleMaster) {
+                    if (u.is_master && !isSelf) {
+                        masterToggleBtn = `<button class="btn-icon btn-revoke-master view-mode" data-id="${u.id}" title="Revogar status Master" style="background:none; border:none; cursor:pointer; font-size:14px; opacity:0.7;" title="Revogar Master">🔽</button>`;
+                    } else if (!u.is_master) {
+                        masterToggleBtn = `<button class="btn-icon btn-grant-master view-mode" data-id="${u.id}" title="Promover a Master" style="background:none; border:none; cursor:pointer; font-size:14px;" title="Promover a Master">⭐</button>`;
+                    }
+                }
+
+                return `
+                <tr id="tr-${u.id}" style="${masterStyle}">
                     <td style="text-align:center;"><span title="ADM não selecionável" style="opacity:0.3;">🔒</span></td>
                     <td>
                         <div style="display:flex; align-items:center; gap:10px;">
@@ -131,14 +163,18 @@ function setupUserList() {
                             <option value="1" ${u.is_lideranca ? 'selected' : ''}>Sim</option>
                         </select>
                     </td>
+                    <td style="text-align:center;">
+                        ${masterBadge}
+                    </td>
                     <td style="text-align:right;">
                         <button class="btn-icon btn-edit view-mode" data-id="${u.id}" title="Editar" style="background:none; border:none; cursor:pointer; font-size:16px;">✏️</button>
+                        ${masterToggleBtn}
                         <button class="btn-icon btn-delete-adm view-mode" data-id="${u.id}" title="Excluir Administrador" style="background:none; border:none; cursor:pointer; font-size:16px;">🗑️</button>
                         <button class="btn-icon btn-save edit-mode" data-id="${u.id}" title="Salvar" style="display:none; background:none; border:none; cursor:pointer; font-size:16px;">💾</button>
                         <button class="btn-icon btn-cancel edit-mode" data-id="${u.id}" title="Cancelar" style="display:none; background:none; border:none; cursor:pointer; font-size:16px;">❌</button>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         }
         
         updateBatchButtonState();
@@ -216,6 +252,34 @@ function setupUserList() {
                     loadUsers();
                 } catch (err) {
                     showToast(err.message || 'Erro ao excluir ADM.', 'error');
+                }
+            }
+        }
+        // Promover a Master
+        else if (target.classList.contains('btn-grant-master')) {
+            const u = usersData.find(x => x.id == id);
+            const userNome = u ? u.nome : 'este usuário';
+            if (confirm(`Promover ${userNome} a Administrador Master?\nIsso concederá acesso irrestrito a todos os contratos.`)) {
+                try {
+                    const res = await api.patch(`/users/${id}/master`, { is_master: true });
+                    showToast(res.message || 'Usuário promovido a ADM Master com sucesso.', 'success');
+                    loadUsers();
+                } catch (err) {
+                    showToast(err.message || 'Erro ao promover usuário a Master.', 'error');
+                }
+            }
+        }
+        // Revogar Master
+        else if (target.classList.contains('btn-revoke-master')) {
+            const u = usersData.find(x => x.id == id);
+            const userNome = u ? u.nome : 'este usuário';
+            if (confirm(`Revogar status Master de ${userNome}?\nEle passará a ter acesso restrito apenas ao próprio contrato.`)) {
+                try {
+                    const res = await api.patch(`/users/${id}/master`, { is_master: false });
+                    showToast(res.message || 'Status Master revogado com sucesso.', 'success');
+                    loadUsers();
+                } catch (err) {
+                    showToast(err.message || 'Erro ao revogar status Master.', 'error');
                 }
             }
         }

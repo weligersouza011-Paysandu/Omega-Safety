@@ -190,6 +190,7 @@ async function initDB() {
             observacoes_adm        TEXT,
             validado_por           VARCHAR(255),
             validado_em            TIMESTAMP,
+            contrato               VARCHAR(255),
             criado_em              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -326,13 +327,18 @@ async function initDB() {
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_data      ON caderno_respostas(data_inspecao);
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_matricula ON caderno_respostas(matricula);
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_caderno   ON caderno_respostas(caderno_id);
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato  ON caderno_respostas(contrato);
         CREATE INDEX IF NOT EXISTS idx_cadernos_inspecao_status    ON cadernos_inspecao(status);
+        CREATE INDEX IF NOT EXISTS idx_usuarios_contrato           ON usuarios(contrato);
+        CREATE INDEX IF NOT EXISTS idx_usuarios_perfil             ON usuarios(perfil);
         `;
 
         await db.execAsync(postgresSchema);
 
         try { await db.execAsync('ALTER TABLE n3_registros ALTER COLUMN nivel TYPE TEXT'); } catch(e){}
         try { await db.execAsync('ALTER TABLE n3_registros ALTER COLUMN status TYPE VARCHAR(255)'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE n3_registros ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato ON n3_registros(contrato)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ALTER COLUMN perfil TYPE VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil TEXT'); } catch(e){}
@@ -349,11 +355,28 @@ async function initDB() {
         const sql = fs.readFileSync(schemaPath, 'utf8');
         await db.execAsync(sql);
 
+        try { await db.execAsync('ALTER TABLE n3_registros ADD COLUMN contrato TEXT'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN contrato TEXT'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN foto_perfil TEXT'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN contrato TEXT'); } catch(e){}
+        // Índices de performance para filtros de contrato e matrícula
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato ON n3_registros(contrato)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato ON caderno_respostas(contrato)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_usuarios_contrato ON usuarios(contrato)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_usuarios_perfil ON usuarios(perfil)'); } catch(e){}
+
+    }
+
+    // Preenche contrato retroativamente em n3_registros antigos baseando-se no contrato do observador
+    try {
+        await db.execAsync(`
+            UPDATE n3_registros 
+            SET contrato = (SELECT u.contrato FROM usuarios u WHERE u.matricula = n3_registros.matricula_observador)
+            WHERE contrato IS NULL OR TRIM(contrato) = ''
+        `);
+    } catch(e){}
 
         try {
             const pendCols = await db.allAsync("PRAGMA table_info(vps_pendencias)");
@@ -382,10 +405,10 @@ async function initDB() {
                 await db.execAsync('PRAGMA foreign_keys=ON');
             }
         } catch(e){}
-    }
 
     console.log('[DB] Schema de tabelas inicializado e pronto.');
 
+    // Seed: garante que o ADM padrão existe
     const adm = await db.getAsync("SELECT id FROM usuarios WHERE matricula = ?", ['1998']);
     if (!adm) {
         const hash = bcrypt.hashSync('1234', 10);
@@ -394,9 +417,11 @@ async function initDB() {
             ['1998', 'Weliger', 'Administrador', 'adm', hash, 1]
         );
         console.log('[DB] ADM padrão criado — matrícula: 1998 / senha: 1234');
-    } else {
-        await db.runAsync("UPDATE usuarios SET is_master = 1 WHERE matricula = '1998'");
     }
+    // Sempre garante is_master=1 para Weliger (1998, 23574) e Denilson Silva (28)
+    try {
+        await db.runAsync("UPDATE usuarios SET is_master = 1 WHERE matricula IN ('1998', '23574', '28')");
+    } catch(e){ console.warn('[DB] Seed masters:', e.message); }
 
     const trein = await db.getAsync("SELECT id FROM treinamentos LIMIT 1");
     if (!trein) {

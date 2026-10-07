@@ -4,7 +4,7 @@ const bcrypt  = require('bcryptjs');
 const multer  = require('multer');
 const db      = require('../database/db');
 const { uploadBuffer, removeMedia } = require('../config/cloudinary');
-const { requireAdm, requireAuth } = require('../middleware/auth.middleware');
+const { requireAdm, requireAuth, requireMaster, requireContractScope } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
 // Foto de perfil: upload em memória → Cloudinary
@@ -135,9 +135,20 @@ router.post('/adm', requireAdm, async (req, res) => {
 });
 
 // ── Listagem Geral (Administrador) ──────────────────────
-router.get('/', requireAdm, async (req, res) => {
+router.get('/', requireAdm, requireContractScope, async (req, res) => {
     try {
-        const rows = await db.allAsync(`SELECT id, matricula, nome, perfil, ativo, criado_em, contrato, foto_perfil, is_lideranca FROM usuarios WHERE ativo = 1 ORDER BY nome ASC`);
+        // ADM comum: lista usuários do próprio contrato + todos os ADMs
+        // ADM Master: lista todos
+        let query = `SELECT id, matricula, nome, perfil, ativo, criado_em, contrato, foto_perfil, is_lideranca, is_master FROM usuarios WHERE ativo = 1`;
+        const params = [];
+
+        if (!req.isMaster && req.contratoScope) {
+            query += ` AND (contrato = ? OR perfil = 'adm')`;
+            params.push(req.contratoScope);
+        }
+
+        query += ` ORDER BY perfil DESC, nome ASC`;
+        const rows = await db.allAsync(query, params);
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -257,15 +268,44 @@ router.delete('/batch', requireAdm, async (req, res) => {
     }
 });
 
-// ── Exclusão Individual (ADM ou Operacional) ──────────────
-router.delete('/:id', requireAdm, async (req, res) => {
+// ── Toggle Master (apenas ADM Master pode conceder/revogar) ──
+router.patch('/:id/master', requireMaster, async (req, res) => {
+    const { is_master } = req.body;
+    const targetId = req.params.id;
+
+    // Impede que o Master retire o próprio status de Master
+    if (Number(targetId) === req.session.usuario.id && !is_master) {
+        return res.status(403).json({ error: 'Você não pode remover o seu próprio status de Master.' });
+    }
+
     try {
-        const user = await db.getAsync(`SELECT id, perfil FROM usuarios WHERE id = ?`, [req.params.id]);
+        const targetUser = await db.getAsync(`SELECT id, perfil, nome FROM usuarios WHERE id = ?`, [targetId]);
+        if (!targetUser) return res.status(404).json({ error: 'Usuário não encontrado.' });
+        if (targetUser.perfil !== 'adm') {
+            return res.status(400).json({ error: 'Apenas Administradores podem ter o status de Master.' });
+        }
+
+        await db.runAsync(`UPDATE usuarios SET is_master = ? WHERE id = ?`, [is_master ? 1 : 0, targetId]);
+        res.json({ message: is_master ? `${targetUser.nome} promovido a Administrador Master.` : `Status de Master removido de ${targetUser.nome}.` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Exclusão Individual (ADM ou Operacional) ──────────────
+router.delete('/:id', requireAdm, requireContractScope, async (req, res) => {
+    try {
+        const user = await db.getAsync(`SELECT id, perfil, is_master FROM usuarios WHERE id = ?`, [req.params.id]);
         if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
         
         // Evita que o ADM exclua a si próprio
         if (user.id === req.session.usuario.id) {
             return res.status(403).json({ error: 'Você não pode excluir a sua própria conta.' });
+        }
+
+        // Impede que ADM comum exclua um Master
+        if (user.is_master && !req.isMaster) {
+            return res.status(403).json({ error: 'Apenas um Administrador Master pode remover outro Master.' });
         }
 
         try {
@@ -282,19 +322,21 @@ router.delete('/:id', requireAdm, async (req, res) => {
 });
 
 // ── Estatísticas do Dashboard Analítico ─────────────────────
-router.get('/stats/dashboard', requireAdm, async (req, res) => {
+router.get('/stats/dashboard', requireAdm, requireContractScope, async (req, res) => {
     try {
-        // Contagem por perfil
-        const perfis = await db.allAsync(`SELECT perfil, COUNT(*) as qtd FROM usuarios WHERE ativo = 1 GROUP BY perfil`);
-        
-        // Contagem por contrato (TODOS os usuários: ADM + Operacionais)
-        const contratos = await db.allAsync(`
-            SELECT contrato, COUNT(*) as qtd 
-            FROM usuarios 
-            WHERE ativo = 1 AND contrato IS NOT NULL AND contrato != ''
-            GROUP BY contrato 
-            ORDER BY qtd DESC
-        `);
+        let perfisQuery = `SELECT perfil, COUNT(*) as qtd FROM usuarios WHERE ativo = 1`;
+        let contratosQuery = `SELECT contrato, COUNT(*) as qtd FROM usuarios WHERE ativo = 1 AND contrato IS NOT NULL AND contrato != ''`;
+        const params = [];
+
+        // ADM comum: restringe estatísticas ao próprio contrato
+        if (!req.isMaster && req.contratoScope) {
+            perfisQuery += ` AND contrato = ?`;
+            contratosQuery += ` AND contrato = ?`;
+            params.push(req.contratoScope);
+        }
+
+        const perfis = await db.allAsync(perfisQuery + ` GROUP BY perfil`, params);
+        const contratos = await db.allAsync(contratosQuery + ` GROUP BY contrato ORDER BY qtd DESC`, params);
 
         res.json({ perfis, contratos });
     } catch (err) {

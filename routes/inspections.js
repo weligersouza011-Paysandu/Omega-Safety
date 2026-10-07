@@ -4,7 +4,7 @@ const multer  = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const db      = require('../database/db');
 const { uploadBuffer, removeMedia } = require('../config/cloudinary');
-const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdm, requireContractScope } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
 // Upload em memória → Cloudinary (apenas a URL vai para o banco)
@@ -20,6 +20,12 @@ async function uploadToCloudinary(file, folder) {
     return secure_url;
 }
 
+// Apenas Master tem acesso irrestrito a todos os contratos
+function isMasterUser(u) {
+    return u && u.is_master === 1;
+}
+
+// Privilégio de escrita/exclusão: Master ou ADM comum
 function isPrivileged(u) {
     return u && (u.is_master === 1 || u.perfil === 'adm');
 }
@@ -57,7 +63,7 @@ function deriveConclusaoTecnica(perguntas, respostasObj) {
 function respostasListQuery() {
     return `SELECT r.*, c.nome as caderno_nome, c.contrato as caderno_contrato
             FROM caderno_respostas r
-            JOIN cadernos_inspecao c ON c.id = r.caderno_id`;
+            LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -65,11 +71,38 @@ function respostasListQuery() {
 //  (rotas específicas ANTES de /:id para não serem interceptadas)
 // ═══════════════════════════════════════════════════════════════
 
+// GET /api/inspecoes/contratos — lista contratos distintos
+router.get('/contratos', requireAuth, async (req, res) => {
+    try {
+        const rows = await db.allAsync(`
+            SELECT DISTINCT contrato FROM (
+                SELECT contrato FROM caderno_respostas WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                UNION
+                SELECT contrato FROM cadernos_inspecao WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                UNION
+                SELECT contrato FROM usuarios WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+            ) ORDER BY contrato ASC
+        `);
+        const set = new Set();
+        rows.forEach(r => {
+            if (r.contrato) {
+                const c = String(r.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(r.contrato).trim();
+                if (c) set.add(c);
+            }
+        });
+        res.json([...set]);
+    } catch(err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/inspecoes/respostas — Listar respostas
-router.get('/respostas', requireAuth, async (req, res) => {
-    const { perfil, matricula } = req.session.usuario;
-    const { caderno_id, page=1, limit=20 } = req.query;
-    const offset = (Number(page)-1)*Number(limit);
+router.get('/respostas', requireAuth, requireContractScope, async (req, res) => {
+    const { matricula } = req.session.usuario;
+    const { caderno_id, page = 1, limit = 50, contrato } = req.query;
+    // Limita a 500 para evitar queries pesadas acidentais
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 500);
+    const offset = (Math.max(Number(page), 1) - 1) * safeLimit;
 
     try {
         let where = '1=1';
@@ -80,32 +113,47 @@ router.get('/respostas', requireAuth, async (req, res) => {
             params.push(caderno_id);
         }
 
-        if (!isPrivileged(req.session.usuario)) {
-            const userContrato = req.session.usuario.contrato;
-            if (userContrato) {
-                where += ' AND r.contrato = ?';
-                params.push(userContrato);
-            } else {
-                where += ' AND r.matricula = ?';
-                params.push(matricula);
+        if (req.isMaster) {
+            // Master: se enviou contrato específico, filtra por ele
+            if (contrato && String(contrato).trim() !== '' && String(contrato).trim() !== 'Todos' && String(contrato).trim() !== 'todos') {
+                const cLimpo = String(contrato).replace(/[^0-9a-zA-Z]/g, '') || String(contrato).trim();
+                where += ' AND (r.contrato = ? OR r.contrato = ? OR c.contrato = ?)';
+                params.push(cLimpo, String(contrato).trim(), cLimpo);
             }
+        } else if (req.contratoScope) {
+            // ADM comum ou Operacional: filtra pelo seu contratoScope
+            const cScope = String(req.contratoScope).replace(/[^0-9a-zA-Z]/g, '') || String(req.contratoScope).trim();
+            if (req.isAdm) {
+                where += ' AND (r.contrato = ? OR r.contrato = ? OR c.contrato = ?)';
+                params.push(cScope, String(req.contratoScope).trim(), cScope);
+            } else {
+                // Operacional: mostra registros do seu contrato OU criados por ele
+                where += ' AND (r.contrato = ? OR r.contrato = ? OR c.contrato = ? OR r.matricula = ?)';
+                params.push(cScope, String(req.contratoScope).trim(), cScope, matricula);
+            }
+        } else {
+            // Sem contrato definido: mostra apenas os próprios registros
+            where += ' AND r.matricula = ?';
+            params.push(matricula);
         }
 
-        const rows = await db.allAsync(
-            `${respostasListQuery()}
-             WHERE ${where}
-             ORDER BY r.data_inspecao DESC, r.criado_em DESC
-             LIMIT ? OFFSET ?`,
-            [...params, Number(limit), offset]
-        );
+        const [rows, totalRow] = await Promise.all([
+            db.allAsync(
+                `${respostasListQuery()}
+                 WHERE ${where}
+                 ORDER BY r.data_inspecao DESC, r.criado_em DESC
+                 LIMIT ? OFFSET ?`,
+                [...params, safeLimit, offset]
+            ),
+            db.getAsync(
+                `SELECT COUNT(*) as count FROM caderno_respostas r LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id WHERE ${where}`,
+                params
+            )
+        ]);
 
-        const totalRow = await db.getAsync(
-            `SELECT COUNT(*) as count FROM caderno_respostas r WHERE ${where}`,
-            params
-        );
-
-        res.json({ data: rows, total: totalRow.count, page: Number(page), limit: Number(limit) });
+        res.json({ data: rows, total: totalRow ? totalRow.count : 0, page: Number(page), limit: safeLimit });
     } catch(err) {
+        console.error('[INSP] Erro ao listar respostas:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -113,14 +161,27 @@ router.get('/respostas', requireAuth, async (req, res) => {
 // GET /api/inspecoes/respostas/stats — Estatísticas para Dashboard
 // Perf.: queries independentes disparam em paralelo (Promise.all) e a categoria
 // é calculada uma única vez numa CTE base (antes: 4× + 2 varreduras da tabela).
-router.get('/respostas/stats', requireAuth, async (req, res) => {
+router.get('/respostas/stats', requireAuth, requireContractScope, async (req, res) => {
     try {
-        const privileged = isPrivileged(req.session.usuario);
         const mat = req.session.usuario.matricula;
+        const userContrato = req.contratoScope; // null = Master (irrestrito)
 
-        const baseParams = privileged ? [] : [mat];
-        const whereMat    = privileged ? '' : 'AND r.matricula = ?';
-        const whereMatBare = privileged ? '' : 'AND matricula = ?';
+        // Master: sem filtro; ADM comum: filtro por contrato; Operacional: filtro por matrícula
+        let baseParams, whereMat, whereMatBare;
+        if (req.isMaster) {
+            baseParams = [];
+            whereMat = '';
+            whereMatBare = '';
+        } else if (userContrato) {
+            baseParams = [userContrato];
+            whereMat = 'AND r.contrato = ?';
+            whereMatBare = 'AND contrato = ?';
+        } else {
+            baseParams = [mat];
+            whereMat = 'AND r.matricula = ?';
+            whereMatBare = 'AND matricula = ?';
+        }
+
 
         const categoriaExpr = `COALESCE(
             NULLIF(TRIM(c.categoria), ''),
@@ -141,7 +202,7 @@ router.get('/respostas/stats', requireAuth, async (req, res) => {
             porUsuario, respostas, todosContratosRows
         ] = await Promise.all([
             db.allAsync(
-                privileged
+                req.isMaster
                     ? `SELECT c.nome, COUNT(r.id) as total
                        FROM cadernos_inspecao c
                        LEFT JOIN caderno_respostas r ON r.caderno_id = c.id
@@ -150,7 +211,7 @@ router.get('/respostas/stats', requireAuth, async (req, res) => {
                     : `SELECT c.nome, COUNT(r.id) as total
                        FROM cadernos_inspecao c
                        JOIN caderno_respostas r ON r.caderno_id = c.id
-                       WHERE r.matricula = ? AND c.status = 'ativo'
+                       WHERE ${userContrato ? 'r.contrato = ?' : 'r.matricula = ?'} AND c.status = 'ativo'
                        GROUP BY c.id ORDER BY total DESC`, baseParams
             ),
 
@@ -204,7 +265,7 @@ router.get('/respostas/stats', requireAuth, async (req, res) => {
                 `SELECT ${categoriaExpr} as categoria, COUNT(*) as total
                  FROM caderno_respostas r
                  LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id
-                 ${privileged ? '' : 'WHERE r.matricula = ?'}
+                 ${req.isMaster ? '' : 'WHERE ' + (userContrato ? 'r.contrato = ?' : 'r.matricula = ?')}
                  GROUP BY 1 ORDER BY total DESC`, baseParams
             ),
 
@@ -228,7 +289,7 @@ router.get('/respostas/stats', requireAuth, async (req, res) => {
                      COUNT(*) as total
                  FROM caderno_respostas r
                  LEFT JOIN usuarios u ON u.matricula = r.matricula
-                 ${privileged ? '' : 'WHERE r.matricula = ?'}
+                 ${req.isMaster ? '' : 'WHERE ' + (userContrato ? 'r.contrato = ?' : 'r.matricula = ?')}
                  GROUP BY 1 ORDER BY total DESC LIMIT 15`, baseParams
             ),
 

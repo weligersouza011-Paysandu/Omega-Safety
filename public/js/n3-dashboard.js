@@ -212,7 +212,16 @@ async function populateContratoFilter(records) {
         selContrato.appendChild(opt);
     });
 
-    if (prevVal && [...contratosSet].includes(prevVal)) {
+    const userObj = window.__currentUser || null;
+    if (userObj && userObj.is_master !== 1 && userObj.contrato) {
+        const normUserContrato = normalizeContrato(userObj.contrato);
+        if (normUserContrato && [...contratosSet].includes(normUserContrato)) {
+            selContrato.value = normUserContrato;
+        }
+        selContrato.disabled = true;
+        selContrato.title = 'Restrito ao seu contrato';
+        selContrato.style.cursor = 'not-allowed';
+    } else if (prevVal && [...contratosSet].includes(prevVal)) {
         selContrato.value = prevVal;
     }
 }

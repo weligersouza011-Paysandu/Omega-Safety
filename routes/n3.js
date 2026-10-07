@@ -5,7 +5,7 @@ const path    = require('path');
 const { v4: uuidv4 } = require('uuid');
 const db      = require('../database/db');
 const { uploadBuffer, removeMedia } = require('../config/cloudinary');
-const { requireAuth, requireAdm } = require('../middleware/auth.middleware');
+const { requireAuth, requireAdm, requireContractScope } = require('../middleware/auth.middleware');
 const router  = express.Router();
 
 // ── Multer (memória) + Cloudinary ───────────────
@@ -29,20 +29,20 @@ async function uploadToCloudinary(file, folder) {
     return secure_url;
 }
 
-// GET /api/n3/contratos — lista contratos distintos com registros N3
+// GET /api/n3/contratos — lista contratos distintos com registros N3 ou usuários
 router.get('/contratos', requireAuth, async (req, res) => {
     try {
         const rows = await db.allAsync(`
-            SELECT DISTINCT u.contrato
-            FROM n3_registros n
-            JOIN usuarios u ON u.matricula = n.matricula_observador
-            WHERE u.contrato IS NOT NULL AND u.contrato != ''
-            ORDER BY u.contrato ASC
+            SELECT DISTINCT contrato FROM (
+                SELECT u.contrato FROM usuarios u WHERE u.contrato IS NOT NULL AND TRIM(u.contrato) != ''
+                UNION
+                SELECT u.contrato FROM n3_registros n JOIN usuarios u ON u.matricula = n.matricula_observador WHERE u.contrato IS NOT NULL AND TRIM(u.contrato) != ''
+            ) ORDER BY contrato ASC
         `);
         const set = new Set();
         rows.forEach(r => {
             if (r.contrato) {
-                const c = String(r.contrato).replace(/[^0-9]/g, '') || String(r.contrato).trim();
+                const c = String(r.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(r.contrato).trim();
                 if (c) set.add(c);
             }
         });
@@ -68,33 +68,36 @@ router.get('/locais', requireAuth, async (req, res) => {
 });
 
 // GET /api/n3
-router.get('/', requireAuth, async (req, res) => {
-    const { perfil, matricula, contrato: userContrato, is_master } = req.session.usuario;
+router.get('/', requireAuth, requireContractScope, async (req, res) => {
+    const { matricula } = req.session.usuario;
     const { nivel, page = 1, limit = 200, contrato } = req.query;
 
     let where = 'WHERE 1=1';
     const params = [];
 
-    const isMasterOrAdm = is_master === 1 || perfil === 'adm';
-
-    if (!isMasterOrAdm) {
-        // Operacional: filtra pelo contrato do usuário logado (via JOIN)
-        if (userContrato && String(userContrato).trim() !== '' && String(userContrato).trim() !== 'Todos') {
-            const userContratoLimpo = String(userContrato).replace(/[^0-9a-zA-Z]/g, '') || String(userContrato).trim();
-            where += ` AND (REPLACE(TRIM(CAST(u.contrato AS TEXT)), 'Contrato ', '') = ? OR TRIM(CAST(u.contrato AS TEXT)) = ?)`;
-            params.push(userContratoLimpo, String(userContrato).trim());
-        } else {
-            // Sem contrato: mostra apenas os próprios
-            where += ` AND n.matricula_observador = ?`;
-            params.push(matricula);
-        }
-    } else {
-        // ADM: filtra por contrato se informado via query e não for "Todos"
+    if (req.isMaster) {
+        // Master: pode filtrar livremente por qualquer contrato
         if (contrato && String(contrato).trim() !== '' && String(contrato).trim() !== 'Todos') {
             const contratoLimpo = String(contrato).replace(/[^0-9a-zA-Z]/g, '') || String(contrato).trim();
-            where += ` AND (REPLACE(TRIM(CAST(u.contrato AS TEXT)), 'Contrato ', '') = ? OR TRIM(CAST(u.contrato AS TEXT)) = ?)`;
-            params.push(contratoLimpo, String(contrato).trim());
+            where += ` AND (n.contrato = ? OR n.contrato = ? OR u.contrato = ? OR u.contrato = ?)`;
+            params.push(contratoLimpo, String(contrato).trim(), contratoLimpo, String(contrato).trim());
         }
+    } else if (req.contratoScope) {
+        // ADM comum ou Operacional com contrato
+        const contratoLimpo = String(req.contratoScope).replace(/[^0-9a-zA-Z]/g, '') || String(req.contratoScope).trim();
+        if (req.isAdm) {
+            // ADM comum: todos do contrato
+            where += ` AND (n.contrato = ? OR n.contrato = ? OR u.contrato = ? OR u.contrato = ?)`;
+            params.push(contratoLimpo, String(req.contratoScope).trim(), contratoLimpo, String(req.contratoScope).trim());
+        } else {
+            // Operacional: do contrato OU próprios (para registros sem contrato no user)
+            where += ` AND ((n.contrato = ? OR n.contrato = ? OR u.contrato = ? OR u.contrato = ?) OR n.matricula_observador = ?)`;
+            params.push(contratoLimpo, String(req.contratoScope).trim(), contratoLimpo, String(req.contratoScope).trim(), matricula);
+        }
+    } else {
+        // Sem contrato: mostra apenas os próprios
+        where += ` AND n.matricula_observador = ?`;
+        params.push(matricula);
     }
 
     if (nivel) {
@@ -102,24 +105,28 @@ router.get('/', requireAuth, async (req, res) => {
         params.push(nivel);
     }
 
-    const offset = (Number(page) - 1) * Number(limit);
+    const safeLimit = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const offset = (Math.max(Number(page), 1) - 1) * safeLimit;
 
     try {
-        const rows  = await db.allAsync(`
-            SELECT n.*, u.contrato as contrato, COALESCE(u.nome, n.nome_observador) as nome_observador
-            FROM n3_registros n
-            LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
-            ${where}
-            ORDER BY n.data DESC, n.criado_em DESC LIMIT ? OFFSET ?
-        `, [...params, Number(limit), offset]);
-        const count = await db.getAsync(`
-            SELECT COUNT(*) as count
-            FROM n3_registros n
-            LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
-            ${where}
-        `, params);
-        res.json({ data: rows, total: count.count, page: Number(page), limit: Number(limit) });
+        const [rows, count] = await Promise.all([
+            db.allAsync(`
+                SELECT n.*, COALESCE(n.contrato, u.contrato) as contrato, COALESCE(u.nome, n.nome_observador) as nome_observador
+                FROM n3_registros n
+                LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
+                ${where}
+                ORDER BY n.data DESC, n.criado_em DESC LIMIT ? OFFSET ?
+            `, [...params, safeLimit, offset]),
+            db.getAsync(`
+                SELECT COUNT(*) as count
+                FROM n3_registros n
+                LEFT JOIN usuarios u ON u.matricula = n.matricula_observador
+                ${where}
+            `, params)
+        ]);
+        res.json({ data: rows, total: count ? count.count : 0, page: Number(page), limit: safeLimit });
     } catch(err) {
+        console.error('[N3] Erro ao listar registros:', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -167,6 +174,7 @@ router.post('/', requireAuth, upload.fields([
         return res.status(400).json({ error: 'A TAG deve conter apenas letras e números.' });
 
     const id  = uuidv4();
+    const userContrato = u.contrato ? String(u.contrato).trim() : null;
 
     // Data do registro: hoje (obrigatório)
     const dataRegistro = data || new Date().toISOString().slice(0,10);
@@ -188,13 +196,13 @@ router.post('/', requireAuth, upload.fields([
                 id, data, matricula_observador, nome_observador, lideranca, nivel,
                 local_ss, descricao_situacao, categoria, subcategoria, tag, plano_acao,
                 empresa_responsavel, lideranca_responsavel, prazo_vencimento,
-                status, evidencia_1_path, evidencia_2_path
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,'Em Análise',?,?)`,
+                status, evidencia_1_path, evidencia_2_path, contrato
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,'Em Análise',?,?,?)`,
             [id, dataRegistro,
              u.matricula, u.nome, lideranca, nivelFinal,
              local_ss, descricao_situacao, categoria||null, subcategoria||null,
              tag||null, plano_acao||null, empresa_responsavel||null,
-             lideranca_responsavel||null, ev1, ev2]
+             lideranca_responsavel||null, ev1, ev2, userContrato]
         );
         res.status(201).json({ id, message: 'N3 registrado com status "Em Análise".' });
     } catch(err) {

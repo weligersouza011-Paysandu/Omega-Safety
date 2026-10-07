@@ -1,6 +1,7 @@
 // public/js/inspecoes.js — Módulo de Inspeções (Caderno de Inspeção)
 
 let currentUser      = null;
+let currentContrato  = '';
 let allCadernos      = [];
 let perguntasEditing = [];
 let openMenuId       = null;
@@ -76,14 +77,25 @@ const INSP_SUBCATEGORIA_TO_CATEGORIA = {
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = await requireLogin();
     if (!currentUser) return;
+    window.__currentUser = currentUser;
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(currentUser, 'inspecoes');
     initLogout();
 
-    const isAdm = currentUser.is_master === 1 || currentUser.perfil === 'adm';
+    if (currentUser.contrato) {
+        currentContrato = String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim();
+    }
+
+    const isMaster = currentUser.is_master === 1;
+    const isAdm = isMaster || currentUser.perfil === 'adm';
+
     if (isAdm) {
         document.getElementById('insp-tabs-container').style.display = 'flex';
         setupTabs();
+
+        const filterBar = document.getElementById('contract-filter-bar-insp');
+        if (filterBar) filterBar.style.display = 'flex';
+        await loadContractOptionsInsp();
     }
 
     loadRegistrosTab();
@@ -145,6 +157,94 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ═══════════════════════════════════════════════════
+//  FILTRO DE CONTRATO DE INSPEÇÕES
+// ═══════════════════════════════════════════════════
+async function loadContractOptionsInsp() {
+    try {
+        const contratos = await api.get('/inspecoes/contratos');
+        const selectList = document.getElementById('select-contrato-insp');
+        const selectDash = document.getElementById('dash-insp-contrato');
+
+        const userC = currentUser && currentUser.contrato 
+            ? (String(currentUser.contrato).replace(/[^0-9a-zA-Z]/g, '') || String(currentUser.contrato).trim())
+            : '';
+
+        const isMaster = currentUser && currentUser.is_master === 1;
+
+        const contractSet = new Set();
+        if (Array.isArray(contratos)) {
+            contratos.forEach(c => {
+                const cleanCode = String(c).replace(/[^0-9a-zA-Z]/g, '') || String(c).trim();
+                if (cleanCode) contractSet.add(cleanCode);
+            });
+        }
+
+        if (userC) {
+            contractSet.add(userC);
+        }
+
+        function populateSelect(selectEl) {
+            if (!selectEl) return;
+            selectEl.innerHTML = '';
+            
+            if (isMaster) {
+                const optTodos = document.createElement('option');
+                optTodos.value = '';
+                optTodos.textContent = 'Todos os Contratos';
+                selectEl.appendChild(optTodos);
+            }
+
+            Array.from(contractSet).sort((a,b) => a.localeCompare(b, undefined, {numeric: true})).forEach(code => {
+                const opt = document.createElement('option');
+                opt.value = code;
+                opt.textContent = `Contrato ${code}`;
+                selectEl.appendChild(opt);
+            });
+
+            if (userC) {
+                selectEl.value = userC;
+            } else if (isMaster) {
+                selectEl.value = '';
+            }
+
+            if (!isMaster) {
+                selectEl.disabled = true;
+                selectEl.title = 'Restrito ao seu contrato';
+                selectEl.style.cursor = 'not-allowed';
+            } else {
+                selectEl.disabled = false;
+            }
+        }
+
+        populateSelect(selectList);
+        populateSelect(selectDash);
+
+        if (userC) {
+            currentContrato = userC;
+        } else if (selectList) {
+            currentContrato = selectList.value;
+        }
+
+        if (selectList && !selectList.dataset.listenerAttached) {
+            selectList.dataset.listenerAttached = 'true';
+            selectList.addEventListener('change', () => {
+                currentContrato = selectList.value;
+                loadRegistrosTab();
+            });
+        }
+
+        if (selectDash && !selectDash.dataset.listenerAttached) {
+            selectDash.dataset.listenerAttached = 'true';
+            selectDash.addEventListener('change', () => {
+                if (typeof loadDashboardTab === 'function') loadDashboardTab();
+            });
+        }
+    } catch (err) {
+        console.error('Erro ao carregar contratos de inspeção:', err);
+    }
+}
+
+// ═══════════════════════════════════════════════════
 //  ABAS (Tabs)
 // ═══════════════════════════════════════════════════
 function setupTabs() {
@@ -176,26 +276,41 @@ async function loadRegistrosTab() {
     const countEl = document.getElementById('insp-registros-count');
     container.innerHTML = spinner('Carregando inspeções...');
 
+    // Timeout de 20s para evitar spinner infinito em conexão lenta
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller
+        ? setTimeout(() => controller.abort(), 20000)
+        : null;
+
     try {
-        const resp = await api.get('/inspecoes/respostas?limit=200');
+        const qp = new URLSearchParams({ limit: 200 });
+        if (currentContrato) qp.set('contrato', currentContrato);
+
+        const resp = await api.get(`/inspecoes/respostas?${qp}`);
+        if (timeoutId) clearTimeout(timeoutId);
         const inspecoes = resp.data || [];
 
         if (countEl) {
             countEl.textContent = inspecoes.length
                 ? `${inspecoes.length} registro(s) encontrado(s)`
-                : 'Nenhum registro ainda — clique em Realizar Inspeção';
+                : 'Nenhuma inspeção encontrada para o seu contrato';
         }
 
         if (!inspecoes.length) {
-            container.innerHTML = emptyState('📋', 'Nenhuma inspeção registrada',
-                'Clique em "Realizar Inspeção" para iniciar a primeira inspeção de rotina.');
+            const isOperacional = currentUser && currentUser.perfil === 'operacional';
+            const emptyMsg = isOperacional
+                ? 'Nenhuma inspeção encontrada para o seu contrato. Realize uma inspeção para que ela apareça aqui.'
+                : 'Clique em "Realizar Inspeção" para iniciar a primeira inspeção de rotina.';
+            container.innerHTML = emptyState('📋', 'Nenhuma inspeção registrada', emptyMsg);
             return;
         }
 
         const groups = groupByDateInsp(inspecoes);
-        container.innerHTML = `<div id="insp-registros-grid"></div>`;
-        const gridContainer = document.getElementById('insp-registros-grid');
+        const gridWrapper = document.createElement('div');
+        gridWrapper.id = 'insp-registros-grid';
 
+        // Usa DocumentFragment para inserir todos os grupos de uma vez (evita reflow por grupo)
+        const fragment = document.createDocumentFragment();
         groups.forEach(group => {
             const groupEl = document.createElement('div');
             groupEl.className = 'n3-date-group';
@@ -209,10 +324,14 @@ async function loadRegistrosTab() {
             gridEl.className = 'n3-grid';
             gridEl.innerHTML = group.items.map(r => renderInspecaoCard(r)).join('');
             groupEl.appendChild(gridEl);
-            gridContainer.appendChild(groupEl);
+            fragment.appendChild(groupEl);
         });
 
-        gridContainer.querySelectorAll('.n3-card').forEach(card => {
+        gridWrapper.appendChild(fragment);
+        container.innerHTML = '';
+        container.appendChild(gridWrapper);
+
+        gridWrapper.querySelectorAll('.n3-card').forEach(card => {
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.n3-card__delete-btn')) return;
                 viewInspecao(card.dataset.id);
@@ -220,7 +339,7 @@ async function loadRegistrosTab() {
         });
 
         if (currentUser && (currentUser.is_master === 1 || currentUser.perfil === 'adm')) {
-            gridContainer.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
+            gridWrapper.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     deleteInspecao(btn.dataset.id);
@@ -229,10 +348,16 @@ async function loadRegistrosTab() {
         }
 
     } catch(err) {
-        if (countEl) countEl.textContent = 'Não foi possível carregar os registros';
-        container.innerHTML = emptyState('❌', 'Erro ao carregar inspeções', err.message);
+        if (timeoutId) clearTimeout(timeoutId);
+        const isTimeout = err && err.name === 'AbortError';
+        if (countEl) countEl.textContent = isTimeout ? 'Tempo limite excedido' : 'Não foi possível carregar os registros';
+        const errMsg = isTimeout
+            ? 'A requisição demorou muito. Verifique a conexão e recarregue a página.'
+            : (err.message || 'Erro desconhecido');
+        container.innerHTML = emptyState('❌', 'Erro ao carregar inspeções', errMsg);
     }
 }
+
 
 function groupByDateInsp(records) {
     const map = new Map();
@@ -489,7 +614,7 @@ async function openNovaInspecaoModal() {
         }
     } catch(_){}
 
-    contratoSel.disabled = !isAdm && !!currentUser.contrato;
+    contratoSel.disabled = currentUser.is_master !== 1 && !!currentUser.contrato;
     contratoSel.style.background = contratoSel.disabled ? 'var(--color-bg-hover)' : '';
     contratoSel.style.cursor = contratoSel.disabled ? 'not-allowed' : '';
 
@@ -1626,7 +1751,14 @@ function populateDashGlobalFilters(respostas = [], todosContratos = []) {
         opt.textContent = c.startsWith('Contrato') ? c : `Contrato ${c}`;
         selContrato.appendChild(opt);
     });
-    if ([...contratosSet].includes(curContrato)) selContrato.value = curContrato;
+    if (currentUser && currentUser.is_master !== 1 && currentUser.contrato) {
+        selContrato.value = currentUser.contrato;
+        selContrato.disabled = true;
+        selContrato.title = 'Restrito ao seu contrato';
+        selContrato.style.cursor = 'not-allowed';
+    } else if ([...contratosSet].includes(curContrato)) {
+        selContrato.value = curContrato;
+    }
 }
 
 function handleDashDropdownChange() {

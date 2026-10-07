@@ -133,9 +133,14 @@ async function requireLogin(role = null) {
     try {
         const user = await api.get('/auth/me');
         saveSession(user);
-        if (role && user.perfil !== role) {
-            window.location.href = '/dashboard';
-            return null;
+        if (role) {
+            // Master tem acesso a tudo que ADM tem acesso
+            const isMaster = user.is_master === 1;
+            const roleOk = user.perfil === role || (role === 'adm' && isMaster);
+            if (!roleOk) {
+                window.location.href = '/dashboard';
+                return null;
+            }
         }
         return user;
     } catch {
@@ -148,6 +153,7 @@ async function requireLogin(role = null) {
 // ── Construir sidebar HTML ───────────────────────────
 function buildSidebar(user, activePage) {
     const isAdm = user.perfil === 'adm';
+    const isMaster = user.is_master === 1;
     const navLinks = [
         { href: '/dashboard', icon: '\uD83C\uDFE0', label: 'Início', key: 'dashboard' },
         { href: '/inspecoes', icon: '\uD83D\uDD0D', label: 'Inspeções', key: 'inspecoes' },
@@ -170,6 +176,14 @@ function buildSidebar(user, activePage) {
     const gamificationBadge = user.foto_perfil
         ? `<span class="badge badge--gold" style="font-size:10px; margin-top:4px;">\uD83D\uDC51 Ouro</span>`
         : `<span class="badge badge--bronze" style="font-size:10px; margin-top:4px;">\uD83E\uDD49 Bronze</span>`;
+
+    // Badge Master: exibe abaixo do badge de gamificação
+    const masterBadge = isMaster
+        ? `<span class="badge" style="font-size:10px; margin-top:2px; background: linear-gradient(135deg, #1e3a5f, #2563eb); color:#fff; padding:2px 6px; border-radius:4px;">⭐ Master</span>`
+        : '';
+
+    // Label de papel: distingue Master de ADM comum
+    const roleLabel = isAdm ? (isMaster ? 'ADM Master' : 'ADM') : 'Op';
 
     const avatarHtml = user.foto_perfil
         ? `<img src="${user.foto_perfil}" alt="Perfil" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
@@ -207,8 +221,9 @@ function buildSidebar(user, activePage) {
                     </div>
                     <div>
                         <div class="sidebar__user-name">${user.nome}</div>
-                        <div class="sidebar__user-mat">Mat. ${user.matricula} · ${isAdm ? 'ADM' : 'Op'}</div>
+                        <div class="sidebar__user-mat">Mat. ${user.matricula} · ${roleLabel}</div>
                         ${gamificationBadge}
+                        ${masterBadge}
                     </div>
                 </div>
                 <button class="btn-logout" id="btn-logout">

@@ -131,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. Verificar autenticação e permissão
     const user = await requireLogin('adm');
     if (!user) return;
+    window.__currentUser = user; // Compartilhado com funções auxiliares (carregarContratos, etc.)
 
     document.getElementById('sidebar-root').innerHTML = buildSidebar(user, 'vps');
     initLogout();
@@ -463,7 +464,15 @@ async function carregarContratos() {
             contratosGlobais.forEach(c => {
                 selFiltro.innerHTML += `<option value="${escapeAttr(c)}">Contrato ${escapeAttr(c)}</option>`;
             });
-            selFiltro.value = valAtual;
+            const userObj = window.__currentUser || null;
+            if (userObj && userObj.is_master !== 1 && userObj.contrato) {
+                selFiltro.value = userObj.contrato;
+                selFiltro.disabled = true;
+                selFiltro.title = 'Restrito ao seu contrato';
+                selFiltro.style.cursor = 'not-allowed';
+            } else {
+                selFiltro.value = valAtual;
+            }
         }
 
         const selNovo = document.getElementById('canteiro-contrato');
