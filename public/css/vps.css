@@ -520,3 +520,35 @@
 .vps-table-btn-delete:hover {
     background: rgba(239, 68, 68, 0.2);
 }
+
+/* Modal de Canteiro: altura responsiva com rolagem interna */
+.profile-modal--scrollable {
+    max-height: 85vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+.profile-modal--scrollable::-webkit-scrollbar {
+    width: 8px;
+}
+
+.profile-modal--scrollable::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.profile-modal--scrollable::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+.profile-modal--scrollable::-webkit-scrollbar-thumb:hover {
+    background: var(--color-red-primary);
+}
+
+@media (max-height: 700px) {
+    .profile-modal--scrollable {
+        max-height: 90vh;
+    }
+}
