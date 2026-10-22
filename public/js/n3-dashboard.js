@@ -234,7 +234,7 @@ async function renderDashboard() {
     if (loading) loading.style.display = 'flex';
 
     try {
-        const qp = new URLSearchParams({ limit: 9999 });
+        const qp = new URLSearchParams();
         const contratoEl = document.getElementById('select-contrato-dashboard') || document.getElementById('dash3-contrato');
         const contratoVal = normalizeContrato(contratoEl?.value);
         if (contratoVal) qp.set('contrato', contratoVal);
@@ -255,8 +255,26 @@ async function renderDashboard() {
 }
 
 async function getAllDashRecords(qp) {
-    const data = await api.get(`/n3?${qp}`);
-    return data.data || [];
+    // O dashboard sempre reflete o histórico completo, independentemente do
+    // período padrão (7 dias) usado pela listagem de registros.
+    const limit = 500;
+    qp.set('periodo', 'all');
+    qp.set('limit', limit);
+
+    let offset = 0;
+    let todos = [];
+
+    // A API limita cada página a 500 registros; percorre as páginas até o fim.
+    while (true) {
+        qp.set('offset', offset);
+        const data = await api.get(`/n3?${qp}`);
+        const rows = Array.isArray(data.data) ? data.data : [];
+        todos = todos.concat(rows);
+        offset += rows.length;
+        if (!rows.length || !data.has_more) break;
+    }
+
+    return todos;
 }
 
 // ══════════════════════════════════════════════════════════════

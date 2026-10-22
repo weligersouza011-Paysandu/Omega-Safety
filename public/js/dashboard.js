@@ -91,7 +91,7 @@ async function loadTrainings(user) {
 async function loadAdmStats() {
     try {
         // N3 Em Análise
-        const n3Data = await api.get('/n3?status=Em Análise&limit=1');
+        const n3Data = await api.get('/n3?status=Em Análise&limit=1&periodo=all');
         document.getElementById('stat-n3-analise').textContent = n3Data.total ?? '—';
 
         // Treinamentos (todos para filtrar)
@@ -121,7 +121,7 @@ async function loadCollabStats() {
 
     try {
         // NIs (N3) registradas pelo usuário
-        const n3 = await api.get('/n3?minhas=1&limit=1');
+        const n3 = await api.get('/n3?minhas=1&limit=1&periodo=all');
         const totalN3 = n3.total ?? (Array.isArray(n3) ? n3.length : null);
         const elN3 = document.getElementById('cs-val-n3');
         if (elN3) elN3.textContent = totalN3 !== null ? totalN3 : '—';

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS n3_registros (
                                    CHECK(status IN ('Em Análise','Aprovado','Reprovado','Pendente','Concluído')),
     evidencia_1_path       TEXT,   -- Caminho relativo do arquivo físico
     evidencia_2_path       TEXT,
+    evidencia_3_path       TEXT,
     observacoes_adm        TEXT,   -- Campo para o ADM ao validar
     validado_por           TEXT,   -- Matrícula do ADM que validou
     validado_em            DATETIME,
@@ -254,3 +255,9 @@ CREATE INDEX IF NOT EXISTS idx_perguntas_caderno_caderno    ON perguntas_caderno
 CREATE INDEX IF NOT EXISTS idx_caderno_respostas_caderno    ON caderno_respostas(caderno_id);
 CREATE INDEX IF NOT EXISTS idx_caderno_respostas_data       ON caderno_respostas(data_inspecao);
 CREATE INDEX IF NOT EXISTS idx_historico_cadernos_caderno   ON historico_cadernos(caderno_id);
+
+-- Listagens progressivas (período + contrato/matrícula) — N3 e Inspeções
+CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato_data   ON caderno_respostas(contrato, data_inspecao);
+CREATE INDEX IF NOT EXISTS idx_caderno_respostas_matricula_data  ON caderno_respostas(matricula, data_inspecao);
+CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato_data        ON n3_registros(contrato, data);
+CREATE INDEX IF NOT EXISTS idx_n3_registros_matricula_data       ON n3_registros(matricula_observador, data);

@@ -44,6 +44,19 @@
                     </select>
                 </div>
 
+                <!-- Período / Histórico -->
+                <div class="timeline-toolbar">
+                    <div class="timeline-toolbar__group">
+                        <label for="select-periodo-insp" class="timeline-toolbar__label">🗓️ Período:</label>
+                        <select id="select-periodo-insp" class="form-select timeline-toolbar__select">
+                            <option value="7d" selected>Últimos 7 dias</option>
+                            <option value="30d">Últimos 30 dias</option>
+                            <option value="90d">Últimos 90 dias</option>
+                            <option value="all">Todo o histórico</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="insp-registros-header">
                     <div>
                         <h3 class="insp-section-title" style="margin-top:0;border:none;padding:0;">Inspeções de Rotina</h3>
@@ -52,6 +65,11 @@
                     <button type="button" class="btn btn--primary insp-btn-nova" id="btn-realizar-inspecao">Realizar Inspeção</button>
                 </div>
                 <div id="registros-content"></div>
+
+                <div id="insp-load-more-container" class="load-more-bar" style="display:none;">
+                    <button id="btn-insp-load-more" type="button" class="btn btn--secondary">Carregar mais histórico</button>
+                    <span id="insp-load-more-hint" class="load-more-bar__hint"></span>
+                </div>
             </div>
 
             <!-- ════════ ABA 2: DASHBOARD DE INSPEÇÕES ════════ -->

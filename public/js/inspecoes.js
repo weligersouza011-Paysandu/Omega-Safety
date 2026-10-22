@@ -6,6 +6,11 @@ let allCadernos      = [];
 let perguntasEditing = [];
 let openMenuId       = null;
 
+let inspPeriod       = '7d';
+let allInspData      = [];
+let inspListState    = { loading: false, hasMore: false, hasHistorico: false, total: 0, totalSemPeriodo: 0 };
+let inspRequestSeq   = 0;
+
 const INSP_SUBCATEGORIAS = [
     'ART (Inconforme)',
     'Checklist (Inconforme)',
@@ -98,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadContractOptionsInsp();
     }
 
+    setupInspPeriodFilter();
     loadRegistrosTab();
 
     if (typeof window.onGlobalChange === 'function') {
@@ -269,12 +275,73 @@ function setupTabs() {
 }
 
 // ═══════════════════════════════════════════════════
+//  PERÍODO / HISTÓRICO — INSPEÇÕES
+// ═══════════════════════════════════════════════════
+function setupInspPeriodFilter() {
+    const select = document.getElementById('select-periodo-insp');
+    if (select) {
+        select.value = inspPeriod;
+        select.addEventListener('change', () => {
+            inspPeriod = select.value || '7d';
+            loadRegistrosTab();
+        });
+    }
+
+    const moreBtn = document.getElementById('btn-insp-load-more');
+    if (moreBtn && !moreBtn.dataset.listenerAttached) {
+        moreBtn.dataset.listenerAttached = 'true';
+        moreBtn.addEventListener('click', () => {
+            if (!inspListState.hasMore && inspListState.hasHistorico && inspPeriod !== 'all') {
+                inspPeriod = 'all';
+                if (select) select.value = 'all';
+            }
+            loadRegistrosTab(false);
+        });
+    }
+}
+
+function updateInspLoadMore() {
+    const container = document.getElementById('insp-load-more-container');
+    const btn = document.getElementById('btn-insp-load-more');
+    const hint = document.getElementById('insp-load-more-hint');
+    if (!container || !btn) return;
+
+    const podeCarregar = inspListState.hasMore || inspListState.hasHistorico;
+    container.style.display = podeCarregar ? 'flex' : 'none';
+    if (!podeCarregar) return;
+
+    if (!inspListState.hasMore && inspListState.hasHistorico && inspPeriod !== 'all') {
+        btn.textContent = 'Carregar mais histórico';
+    } else {
+        btn.textContent = 'Carregar mais registros';
+    }
+
+    if (hint) {
+        hint.textContent = `${allInspData.length} de ${inspListState.total} carregado(s)` +
+            (inspListState.hasHistorico ? ` · ${inspListState.totalSemPeriodo} no histórico total` : '');
+    }
+}
+
+// ═══════════════════════════════════════════════════
 //  ABA 1: REGISTROS / ROTINA — Cards de Inspeções
 // ═══════════════════════════════════════════════════
-async function loadRegistrosTab() {
+async function loadRegistrosTab(reset = true) {
+    // Descarta respostas antigas quando o usuário troca filtro/período.
+    const seq = ++inspRequestSeq;
+
     const container = document.getElementById('registros-content');
     const countEl = document.getElementById('insp-registros-count');
-    container.innerHTML = spinner('Carregando inspeções...');
+    const moreBtn = document.getElementById('btn-insp-load-more');
+
+    if (reset) {
+        allInspData = [];
+        container.innerHTML = spinner('Carregando inspeções...');
+    } else if (moreBtn) {
+        moreBtn.disabled = true;
+        moreBtn.textContent = 'Carregando...';
+    }
+
+    inspListState.loading = true;
 
     // Timeout de 20s para evitar spinner infinito em conexão lenta
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -283,78 +350,118 @@ async function loadRegistrosTab() {
         : null;
 
     try {
-        const qp = new URLSearchParams({ limit: 200 });
+        const qp = new URLSearchParams({
+            limit: 100,
+            periodo: inspPeriod || '7d',
+            offset: reset ? 0 : allInspData.length,
+        });
         if (currentContrato) qp.set('contrato', currentContrato);
 
         const resp = await api.get(`/inspecoes/respostas?${qp}`);
         if (timeoutId) clearTimeout(timeoutId);
-        const inspecoes = resp.data || [];
+        if (seq !== inspRequestSeq) return;
+
+        inspListState.hasMore = !!resp.has_more;
+        inspListState.hasHistorico = !!resp.has_historico;
+        inspListState.total = Number(resp.total) || 0;
+        inspListState.totalSemPeriodo = Number(resp.total_sem_periodo) || inspListState.total;
+
+        const recebidos = Array.isArray(resp.data) ? resp.data : [];
+        if (reset) {
+            allInspData = recebidos;
+        } else {
+            const existentes = new Set(allInspData.map(r => r.id));
+            allInspData = allInspData.concat(recebidos.filter(r => !existentes.has(r.id)));
+        }
 
         if (countEl) {
-            countEl.textContent = inspecoes.length
-                ? `${inspecoes.length} registro(s) encontrado(s)`
-                : 'Nenhuma inspeção encontrada para o seu contrato';
+            if (allInspData.length) {
+                countEl.textContent = `${allInspData.length} de ${inspListState.total} registro(s)` +
+                    (inspListState.hasHistorico ? ` · ${inspListState.totalSemPeriodo} no histórico` : '');
+            } else if (inspListState.hasHistorico) {
+                countEl.textContent = `0 no período · ${inspListState.totalSemPeriodo} no histórico`;
+            } else {
+                countEl.textContent = 'Nenhuma inspeção encontrada para o seu contrato';
+            }
         }
 
-        if (!inspecoes.length) {
-            const isOperacional = currentUser && currentUser.perfil === 'operacional';
-            const emptyMsg = isOperacional
-                ? 'Nenhuma inspeção encontrada para o seu contrato. Realize uma inspeção para que ela apareça aqui.'
-                : 'Clique em "Realizar Inspeção" para iniciar a primeira inspeção de rotina.';
-            container.innerHTML = emptyState('📋', 'Nenhuma inspeção registrada', emptyMsg);
-            return;
-        }
-
-        const groups = groupByDateInsp(inspecoes);
-        const gridWrapper = document.createElement('div');
-        gridWrapper.id = 'insp-registros-grid';
-
-        // Usa DocumentFragment para inserir todos os grupos de uma vez (evita reflow por grupo)
-        const fragment = document.createDocumentFragment();
-        groups.forEach(group => {
-            const groupEl = document.createElement('div');
-            groupEl.className = 'n3-date-group';
-            groupEl.innerHTML = `
-                <div class="n3-date-group__header">
-                    <div class="n3-date-group__date">📅 ${group.dateFormatted}</div>
-                    <div class="n3-date-group__count">${group.items.length} registro${group.items.length > 1 ? 's' : ''}</div>
-                </div>
-            `;
-            const gridEl = document.createElement('div');
-            gridEl.className = 'n3-grid';
-            gridEl.innerHTML = group.items.map(r => renderInspecaoCard(r)).join('');
-            groupEl.appendChild(gridEl);
-            fragment.appendChild(groupEl);
-        });
-
-        gridWrapper.appendChild(fragment);
-        container.innerHTML = '';
-        container.appendChild(gridWrapper);
-
-        gridWrapper.querySelectorAll('.n3-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                if (e.target.closest('.n3-card__delete-btn')) return;
-                viewInspecao(card.dataset.id);
-            });
-        });
-
-        if (currentUser && (currentUser.is_master === 1 || currentUser.perfil === 'adm')) {
-            gridWrapper.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteInspecao(btn.dataset.id);
-                });
-            });
-        }
-
+        renderInspRegistros();
     } catch(err) {
         if (timeoutId) clearTimeout(timeoutId);
+        if (seq !== inspRequestSeq) return;
         const isTimeout = err && err.name === 'AbortError';
         if (countEl) countEl.textContent = isTimeout ? 'Tempo limite excedido' : 'Não foi possível carregar os registros';
         const errMsg = isTimeout
             ? 'A requisição demorou muito. Verifique a conexão e recarregue a página.'
             : (err.message || 'Erro desconhecido');
-        container.innerHTML = emptyState('❌', 'Erro ao carregar inspeções', errMsg);
+        if (reset) {
+            container.innerHTML = emptyState('❌', 'Erro ao carregar inspeções', errMsg);
+        } else {
+            showToast(errMsg, 'error');
+        }
+    } finally {
+        if (seq === inspRequestSeq) {
+            inspListState.loading = false;
+            if (moreBtn) moreBtn.disabled = false;
+            updateInspLoadMore();
+        }
+    }
+}
+
+function renderInspRegistros() {
+    const container = document.getElementById('registros-content');
+
+    if (!allInspData.length) {
+        const isOperacional = currentUser && currentUser.perfil === 'operacional';
+        const emptyMsg = isOperacional
+            ? 'Nenhuma inspeção encontrada para o seu contrato neste período. Realize uma inspeção para que ela apareça aqui.'
+            : inspListState.hasHistorico
+                ? 'Nenhuma inspeção nos últimos 7 dias. Use o botão abaixo para carregar o histórico.'
+                : 'Clique em "Realizar Inspeção" para iniciar a primeira inspeção de rotina.';
+        container.innerHTML = emptyState('📋', 'Nenhuma inspeção registrada', emptyMsg);
+        return;
+    }
+
+    const groups = groupByDateInsp(allInspData);
+    const gridWrapper = document.createElement('div');
+    gridWrapper.id = 'insp-registros-grid';
+
+    // Usa DocumentFragment para inserir todos os grupos de uma vez (evita reflow por grupo)
+    const fragment = document.createDocumentFragment();
+    groups.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'n3-date-group';
+        groupEl.innerHTML = `
+            <div class="n3-date-group__header">
+                <div class="n3-date-group__date">📅 ${group.dateFormatted}</div>
+                <div class="n3-date-group__count">${group.items.length} registro${group.items.length > 1 ? 's' : ''}</div>
+            </div>
+        `;
+        const gridEl = document.createElement('div');
+        gridEl.className = 'n3-grid';
+        gridEl.innerHTML = group.items.map(r => renderInspecaoCard(r)).join('');
+        groupEl.appendChild(gridEl);
+        fragment.appendChild(groupEl);
+    });
+
+    gridWrapper.appendChild(fragment);
+    container.innerHTML = '';
+    container.appendChild(gridWrapper);
+
+    gridWrapper.querySelectorAll('.n3-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.closest('.n3-card__delete-btn')) return;
+            viewInspecao(card.dataset.id);
+        });
+    });
+
+    if (currentUser && (currentUser.is_master === 1 || currentUser.perfil === 'adm')) {
+        gridWrapper.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteInspecao(btn.dataset.id);
+            });
+        });
     }
 }
 

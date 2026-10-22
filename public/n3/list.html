@@ -46,6 +46,25 @@
                     </select>
                 </div>
 
+                <!-- Período / Histórico + Importação (ADM) -->
+                <div class="timeline-toolbar">
+                    <div class="timeline-toolbar__group">
+                        <label for="select-periodo-n3" class="timeline-toolbar__label">🗓️ Período:</label>
+                        <select id="select-periodo-n3" class="form-select timeline-toolbar__select">
+                            <option value="7d" selected>Últimos 7 dias</option>
+                            <option value="30d">Últimos 30 dias</option>
+                            <option value="90d">Últimos 90 dias</option>
+                            <option value="all">Todo o histórico</option>
+                        </select>
+                    </div>
+                    <div class="timeline-toolbar__group timeline-toolbar__group--end">
+                        <input type="file" id="input-importar-n3" accept=".xlsx,.xls,.csv" hidden>
+                        <button type="button" id="btn-importar-n3" class="btn btn--secondary" style="display:none;">
+                            📥 Importar planilha
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Filtros de Nível -->
                 <div class="n3-list-header">
                     <div class="n3-filters" id="filter-buttons" role="group" aria-label="Filtrar por nível">
@@ -64,6 +83,12 @@
                 <!-- Container de Cards Agrupados por Data -->
                 <div id="n3-grid-container">
                     <!-- Injetado por JS: grupos de data + cards -->
+                </div>
+
+                <!-- Carregar mais (paginado, sem recarregar o histórico inteiro) -->
+                <div id="n3-load-more-container" class="load-more-bar" style="display:none;">
+                    <button id="btn-n3-load-more" type="button" class="btn btn--secondary">Carregar mais histórico</button>
+                    <span id="n3-load-more-hint" class="load-more-bar__hint"></span>
                 </div>
 
             </div>

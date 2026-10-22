@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const db      = require('../database/db');
 const { uploadBuffer, removeMedia } = require('../config/cloudinary');
 const { requireAuth, requireAdm, requireContractScope } = require('../middleware/auth.middleware');
+const { resolvePeriod, buildPeriodClause, periodMeta } = require('../utils/period');
 const router  = express.Router();
 
 // Upload em memória → Cloudinary (apenas a URL vai para o banco)
@@ -97,12 +98,20 @@ router.get('/contratos', requireAuth, async (req, res) => {
 });
 
 // GET /api/inspecoes/respostas — Listar respostas
+// Por padrão retorna apenas os últimos 7 dias. O histórico completo é carregado
+// sob demanda com periodo=all (ou data_inicio/data_fim) + offset/limit.
 router.get('/respostas', requireAuth, requireContractScope, async (req, res) => {
     const { matricula } = req.session.usuario;
     const { caderno_id, page = 1, limit = 50, contrato } = req.query;
     // Limita a 500 para evitar queries pesadas acidentais
     const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 500);
-    const offset = (Math.max(Number(page), 1) - 1) * safeLimit;
+
+    const offsetRaw = req.query.offset;
+    const parsedOffset = Number(offsetRaw);
+    const pageNumber = Math.max(Number(page) || 1, 1);
+    const offset = (offsetRaw !== undefined && offsetRaw !== '' && Number.isFinite(parsedOffset) && parsedOffset >= 0)
+        ? Math.floor(parsedOffset)
+        : (pageNumber - 1) * safeLimit;
 
     try {
         let where = '1=1';
@@ -137,21 +146,48 @@ router.get('/respostas', requireAuth, requireContractScope, async (req, res) => 
             params.push(matricula);
         }
 
-        const [rows, totalRow] = await Promise.all([
+        // Janela de datas (default: últimos 7 dias)
+        const period = resolvePeriod(req.query, 7);
+        const periodClause = buildPeriodClause('r.data_inspecao', period);
+        const periodWhere = periodClause.sql ? ` AND ${periodClause.sql}` : '';
+        const periodParams = periodClause.params;
+        const scopedWhere = `${where}${periodWhere}`;
+        const scopedParams = [...params, ...periodParams];
+
+        const [rows, totalRow, allCount] = await Promise.all([
             db.allAsync(
                 `${respostasListQuery()}
-                 WHERE ${where}
-                 ORDER BY r.data_inspecao DESC, r.criado_em DESC
+                 WHERE ${scopedWhere}
+                 ORDER BY r.data_inspecao DESC, r.criado_em DESC, r.id DESC
                  LIMIT ? OFFSET ?`,
-                [...params, safeLimit, offset]
+                [...scopedParams, safeLimit, offset]
             ),
             db.getAsync(
-                `SELECT COUNT(*) as count FROM caderno_respostas r LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id WHERE ${where}`,
-                params
-            )
+                `SELECT COUNT(*) as count FROM caderno_respostas r LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id WHERE ${scopedWhere}`,
+                scopedParams
+            ),
+            period.mode === 'all'
+                ? Promise.resolve(null)
+                : db.getAsync(
+                    `SELECT COUNT(*) as count FROM caderno_respostas r LEFT JOIN cadernos_inspecao c ON c.id = r.caderno_id WHERE ${where}`,
+                    params
+                )
         ]);
 
-        res.json({ data: rows, total: totalRow ? totalRow.count : 0, page: Number(page), limit: safeLimit });
+        const total = totalRow ? Number(totalRow.count) : 0;
+        const totalSemPeriodo = allCount ? Number(allCount.count) : total;
+
+        res.json({
+            data: rows,
+            total,
+            total_sem_periodo: totalSemPeriodo,
+            page: Math.floor(offset / safeLimit) + 1,
+            limit: safeLimit,
+            offset,
+            has_more: offset + rows.length < total,
+            has_historico: totalSemPeriodo > total,
+            period: periodMeta(period),
+        });
     } catch(err) {
         console.error('[INSP] Erro ao listar respostas:', err);
         res.status(500).json({ error: err.message });

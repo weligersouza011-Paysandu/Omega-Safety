@@ -27,6 +27,9 @@ sessions.db
 uploads/*
 !uploads/.gitkeep
 
+# Planilhas locais de importação (dados pessoais/históricos)
+13/
+
 # System & OS Files
 .DS_Store
 Thumbs.db

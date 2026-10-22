@@ -187,6 +187,7 @@ async function initDB() {
             status                 VARCHAR(255) DEFAULT 'Em Análise',
             evidencia_1_path       TEXT,
             evidencia_2_path       TEXT,
+            evidencia_3_path       TEXT,
             observacoes_adm        TEXT,
             validado_por           VARCHAR(255),
             validado_em            TIMESTAMP,
@@ -328,6 +329,8 @@ async function initDB() {
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_matricula ON caderno_respostas(matricula);
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_caderno   ON caderno_respostas(caderno_id);
         CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato  ON caderno_respostas(contrato);
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato_data  ON caderno_respostas(contrato, data_inspecao);
+        CREATE INDEX IF NOT EXISTS idx_caderno_respostas_matricula_data ON caderno_respostas(matricula, data_inspecao);
         CREATE INDEX IF NOT EXISTS idx_cadernos_inspecao_status    ON cadernos_inspecao(status);
         CREATE INDEX IF NOT EXISTS idx_usuarios_contrato           ON usuarios(contrato);
         CREATE INDEX IF NOT EXISTS idx_usuarios_perfil             ON usuarios(perfil);
@@ -342,6 +345,8 @@ async function initDB() {
         try { await db.execAsync('ALTER TABLE n3_registros ALTER COLUMN status TYPE VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE n3_registros ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato ON n3_registros(contrato)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato_data ON n3_registros(contrato, data)'); } catch(e){}
+        try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_matricula_data ON n3_registros(matricula_observador, data)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ALTER COLUMN perfil TYPE VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS foto_perfil TEXT'); } catch(e){}
@@ -349,6 +354,7 @@ async function initDB() {
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_master INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN IF NOT EXISTS contrato VARCHAR(255)'); } catch(e){}
         try { await db.execAsync('ALTER TABLE vps_historico ADD COLUMN IF NOT EXISTS evidencia_3_path TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE n3_registros ADD COLUMN IF NOT EXISTS evidencia_3_path TEXT'); } catch(e){}
 
     } else {
         await db.runAsync('PRAGMA journal_mode=WAL');
@@ -364,6 +370,7 @@ async function initDB() {
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_lideranca INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE usuarios ADD COLUMN is_master INTEGER DEFAULT 0'); } catch(e){}
         try { await db.execAsync('ALTER TABLE vps_canteiros ADD COLUMN contrato TEXT'); } catch(e){}
+        try { await db.execAsync('ALTER TABLE n3_registros ADD COLUMN evidencia_3_path TEXT'); } catch(e){}
         // Índices de performance para filtros de contrato e matrícula
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato ON n3_registros(contrato)'); } catch(e){}
         try { await db.execAsync('CREATE INDEX IF NOT EXISTS idx_caderno_respostas_contrato ON caderno_respostas(contrato)'); } catch(e){}
@@ -425,6 +432,8 @@ async function initDB() {
             "CREATE INDEX IF NOT EXISTS idx_n3_nivel ON n3_registros(nivel);",
             "CREATE INDEX IF NOT EXISTS idx_n3_data ON n3_registros(data);",
             "CREATE INDEX IF NOT EXISTS idx_n3_status ON n3_registros(status);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_registros_contrato_data ON n3_registros(contrato, data);",
+            "CREATE INDEX IF NOT EXISTS idx_n3_registros_matricula_data ON n3_registros(matricula_observador, data);",
             
             // VPS Canteiros
             "CREATE INDEX IF NOT EXISTS idx_vps_canteiros_contrato ON vps_canteiros(contrato);",
@@ -440,6 +449,8 @@ async function initDB() {
             "CREATE INDEX IF NOT EXISTS idx_inspecoes_matricula ON inspecoes_avulsas(matricula);",
             "CREATE INDEX IF NOT EXISTS idx_cad_respostas_matricula ON caderno_respostas(matricula);",
             "CREATE INDEX IF NOT EXISTS idx_cad_respostas_contrato ON caderno_respostas(contrato);",
+            "CREATE INDEX IF NOT EXISTS idx_cad_respostas_contrato_data ON caderno_respostas(contrato, data_inspecao);",
+            "CREATE INDEX IF NOT EXISTS idx_cad_respostas_matricula_data ON caderno_respostas(matricula, data_inspecao);",
             "CREATE INDEX IF NOT EXISTS idx_n3_historico_n3_id ON n3_historico(n3_id);"
         ];
 

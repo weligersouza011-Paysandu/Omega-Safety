@@ -3,7 +3,11 @@
 let currentUser     = null;
 let currentFilter   = '';
 let currentContrato = '';
+let currentPeriod   = '7d';
 let allN3Data       = [];
+let n3ListState     = { loading: false, hasMore: false, hasHistorico: false, total: 0, totalSemPeriodo: 0 };
+let n3Importing     = false;
+let n3RequestSeq    = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
     currentUser = await requireLogin();
@@ -35,11 +39,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Filtros de Status ──
     setupStatusFilters();
 
+    // ── Período / histórico e importação (ADM) ──
+    setupPeriodFilter();
+    setupN3Import(isAdm);
+
     // ── Carregar N3 ──
     loadN3();
 
     if (typeof window.onGlobalChange === 'function') {
         window.onGlobalChange(async () => {
+            // Durante a importação o recarregamento é controlado manualmente,
+            // para já abrir o histórico em vez de recarregar os últimos 7 dias.
+            if (n3Importing) return;
             if (typeof loadN3 === 'function') {
                 loadN3();
             }
@@ -182,91 +193,246 @@ function setupStatusFilters() {
 }
 
 // ═══════════════════════════════════════════════════
+//  PERÍODO / HISTÓRICO
+// ═══════════════════════════════════════════════════
+function setupPeriodFilter() {
+    const select = document.getElementById('select-periodo-n3');
+    if (select) {
+        select.value = currentPeriod;
+        select.addEventListener('change', () => {
+            currentPeriod = select.value || '7d';
+            loadN3();
+        });
+    }
+
+    const moreBtn = document.getElementById('btn-n3-load-more');
+    if (moreBtn && !moreBtn.dataset.listenerAttached) {
+        moreBtn.dataset.listenerAttached = 'true';
+        moreBtn.addEventListener('click', () => {
+            // Quando o período atual acabou, o próximo clique salta para o
+            // histórico completo, continuando de onde os registros pararam.
+            if (!n3ListState.hasMore && n3ListState.hasHistorico && currentPeriod !== 'all') {
+                currentPeriod = 'all';
+                if (select) select.value = 'all';
+            }
+            loadN3(false);
+        });
+    }
+}
+
+function updateN3LoadMore() {
+    const container = document.getElementById('n3-load-more-container');
+    const btn = document.getElementById('btn-n3-load-more');
+    const hint = document.getElementById('n3-load-more-hint');
+    if (!container || !btn) return;
+
+    const podeCarregar = n3ListState.hasMore || n3ListState.hasHistorico;
+    container.style.display = podeCarregar ? 'flex' : 'none';
+    if (!podeCarregar) return;
+
+    if (!n3ListState.hasMore && n3ListState.hasHistorico && currentPeriod !== 'all') {
+        btn.textContent = 'Carregar mais histórico';
+    } else {
+        btn.textContent = 'Carregar mais registros';
+    }
+
+    if (hint) {
+        hint.textContent = `${allN3Data.length} de ${n3ListState.total} carregado(s)` +
+            (n3ListState.hasHistorico ? ` · ${n3ListState.totalSemPeriodo} no histórico total` : '');
+    }
+}
+
+// ═══════════════════════════════════════════════════
+//  IMPORTAÇÃO DE PLANILHA (ADM)
+// ═══════════════════════════════════════════════════
+function setupN3Import(isAdm) {
+    const btn = document.getElementById('btn-importar-n3');
+    const input = document.getElementById('input-importar-n3');
+    if (!btn || !input || !isAdm) return;
+
+    btn.style.display = 'inline-flex';
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+
+        const textoOriginal = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Importando...';
+        n3Importing = true;
+
+        let importou = false;
+
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const resp = await api.upload('/n3/importar', form);
+
+            let msg = resp.message || 'Planilha importada.';
+            if (resp.erros && resp.erros.length) {
+                msg += ` ${resp.erros.length} linha(s) com erro.`;
+            }
+            showToast(msg, resp.inseridos > 0 ? 'success' : 'warning', 9000);
+            importou = true;
+        } catch (err) {
+            showToast(err.message || 'Erro ao importar planilha.', 'error', 9000);
+        } finally {
+            n3Importing = false;
+            input.value = '';
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+        }
+
+        if (importou) {
+            // Abre o histórico para o usuário conferir o que entrou.
+            currentPeriod = 'all';
+            const select = document.getElementById('select-periodo-n3');
+            if (select) select.value = 'all';
+            loadN3();
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════
 //  CARREGAR e AGRUPAR N3 (Cronologia Inversa)
 // ═══════════════════════════════════════════════════
-async function loadN3() {
+async function loadN3(reset = true) {
+    // Cada chamada recebe uma sequência; respostas antigas são descartadas
+    // para que trocar de filtro/período nunca exiba dados desatualizados.
+    const seq = ++n3RequestSeq;
+
     const container = document.getElementById('n3-grid-container');
-    container.innerHTML = `<div style="text-align:center;padding:var(--space-2xl);color:var(--color-text-muted)">
-        <div class="spinner" style="margin:0 auto;width:32px;height:32px;border-width:3px;"></div>
-        <div style="margin-top:var(--space-md)">Carregando...</div>
-    </div>`;
+    const moreBtn = document.getElementById('btn-n3-load-more');
+
+    if (reset) {
+        allN3Data = [];
+        container.innerHTML = `<div style="text-align:center;padding:var(--space-2xl);color:var(--color-text-muted)">
+            <div class="spinner" style="margin:0 auto;width:32px;height:32px;border-width:3px;"></div>
+            <div style="margin-top:var(--space-md)">Carregando...</div>
+        </div>`;
+    } else if (moreBtn) {
+        moreBtn.disabled = true;
+        moreBtn.textContent = 'Carregando...';
+    }
+
+    n3ListState.loading = true;
 
     try {
-        const qp = new URLSearchParams({ limit: 500 });
+        const qp = new URLSearchParams({
+            limit: 100,
+            periodo: currentPeriod || '7d',
+            offset: reset ? 0 : allN3Data.length,
+        });
         if (currentFilter) qp.set('nivel', currentFilter);
         if (currentContrato) qp.set('contrato', currentContrato);
 
         const data = await api.get(`/n3?${qp}`);
-        allN3Data = data.data;
-        document.getElementById('total-label').textContent = `${data.total} registro(s)`;
+        if (seq !== n3RequestSeq) return;
 
-        if (!data.data.length) {
-            const isOperacional = currentUser && currentUser.perfil === 'operacional';
-            const emptyDesc = currentFilter
-                ? `Nenhum registro com nível "${currentFilter}".`
-                : isOperacional
-                    ? 'Nenhum N3 encontrado para o seu contrato. Registe uma ocorrência para que apareça aqui.'
-                    : 'Nenhum registro N3 encontrado para os filtros selecionados.';
-            container.innerHTML = `<div>
-                <div class="empty-state">
-                    <div class="empty-state__icon">📭</div>
-                    <div class="empty-state__title">Nenhum N3 encontrado</div>
-                    <div class="empty-state__desc">${emptyDesc}</div>
-                </div>
-            </div>`;
-            return;
+        n3ListState.hasMore = !!data.has_more;
+        n3ListState.hasHistorico = !!data.has_historico;
+        n3ListState.total = Number(data.total) || 0;
+        n3ListState.totalSemPeriodo = Number(data.total_sem_periodo) || n3ListState.total;
+
+        const recebidos = Array.isArray(data.data) ? data.data : [];
+        if (reset) {
+            allN3Data = recebidos;
+        } else {
+            const existentes = new Set(allN3Data.map(r => r.id));
+            allN3Data = allN3Data.concat(recebidos.filter(r => !existentes.has(r.id)));
         }
 
-        // Agrupar por data
-        const groups = groupByDate(data.data);
-        container.innerHTML = '';
+        document.getElementById('total-label').textContent =
+            `${allN3Data.length} de ${n3ListState.total} registro(s)` +
+            (n3ListState.hasHistorico ? ` · ${n3ListState.totalSemPeriodo} no histórico` : '');
 
-        groups.forEach(group => {
-            const groupEl = document.createElement('div');
-            groupEl.className = 'n3-date-group';
-
-            // Header do grupo com data e contador
-            groupEl.innerHTML = `
-                <div class="n3-date-group__header" style="color: #FFFFFF; font-weight: bold;">
-                    <div class="n3-date-group__date">📅 ${group.dateFormatted}</div>
-                    <div class="n3-date-group__count">${group.items.length} registro${group.items.length > 1 ? 's' : ''}</div>
-                </div>
-            `;
-
-            // Grid de cards dentro do grupo
-            const gridEl = document.createElement('div');
-            gridEl.className = 'n3-grid';
-            gridEl.innerHTML = group.items.map(n3 => renderN3Card(n3)).join('');
-            groupEl.appendChild(gridEl);
-
-            container.appendChild(groupEl);
-        });
-
-        // Bind: click nos cards abre modal
-        container.querySelectorAll('.n3-card').forEach(card => {
-            card.addEventListener('click', (e) => {
-                // Se clicou no botão de excluir, não abre o modal
-                if (e.target.closest('.n3-card__delete-btn')) return;
-                openModal(card.dataset.id);
-            });
-        });
-
-        // Bind: botões de exclusão (ADM)
-        if (currentUser.perfil === 'adm') {
-            container.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteN3(btn.dataset.id);
-                });
-            });
-        }
-
+        renderN3List();
+        updateN3LoadMore();
     } catch (err) {
-        container.innerHTML = `<div><div class="empty-state">
-            <div class="empty-state__icon">❌</div>
-            <div class="empty-state__title">Erro ao carregar</div>
-            <div class="empty-state__desc">${err.message}</div>
-        </div></div>`;
+        if (seq !== n3RequestSeq) return;
+        if (reset) {
+            container.innerHTML = `<div><div class="empty-state">
+                <div class="empty-state__icon">❌</div>
+                <div class="empty-state__title">Erro ao carregar</div>
+                <div class="empty-state__desc">${err.message}</div>
+            </div></div>`;
+        } else {
+            showToast(err.message || 'Erro ao carregar mais registros.', 'error');
+        }
+    } finally {
+        if (seq === n3RequestSeq) {
+            n3ListState.loading = false;
+            if (moreBtn) moreBtn.disabled = false;
+            updateN3LoadMore();
+        }
+    }
+}
+
+function renderN3List() {
+    const container = document.getElementById('n3-grid-container');
+
+    if (!allN3Data.length) {
+        const isOperacional = currentUser && currentUser.perfil === 'operacional';
+        const temHistorico = n3ListState.hasHistorico;
+        const emptyDesc = currentFilter
+            ? `Nenhum registro com nível "${currentFilter}" neste período.`
+            : isOperacional
+                ? 'Nenhum N3 encontrado para o seu contrato neste período. Registe uma ocorrência para que apareça aqui.'
+                : temHistorico
+                    ? 'Nenhum N3 nos últimos 7 dias. Use o botão abaixo para carregar o histórico.'
+                    : 'Nenhum registro N3 encontrado para os filtros selecionados.';
+        container.innerHTML = `<div>
+            <div class="empty-state">
+                <div class="empty-state__icon">📭</div>
+                <div class="empty-state__title">Nenhum N3 encontrado</div>
+                <div class="empty-state__desc">${emptyDesc}</div>
+            </div>
+        </div>`;
+        return;
+    }
+
+    // Agrupar por data
+    const groups = groupByDate(allN3Data);
+    container.innerHTML = '';
+
+    groups.forEach(group => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'n3-date-group';
+
+        // Header do grupo com data e contador
+        groupEl.innerHTML = `
+            <div class="n3-date-group__header" style="color: #FFFFFF; font-weight: bold;">
+                <div class="n3-date-group__date">📅 ${group.dateFormatted}</div>
+                <div class="n3-date-group__count">${group.items.length} registro${group.items.length > 1 ? 's' : ''}</div>
+            </div>
+        `;
+
+        // Grid de cards dentro do grupo
+        const gridEl = document.createElement('div');
+        gridEl.className = 'n3-grid';
+        gridEl.innerHTML = group.items.map(n3 => renderN3Card(n3)).join('');
+        groupEl.appendChild(gridEl);
+
+        container.appendChild(groupEl);
+    });
+
+    // Bind: click nos cards abre modal
+    container.querySelectorAll('.n3-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            // Se clicou no botão de excluir, não abre o modal
+            if (e.target.closest('.n3-card__delete-btn')) return;
+            openModal(card.dataset.id);
+        });
+    });
+
+    // Bind: botões de exclusão (ADM)
+    if (currentUser.perfil === 'adm' || currentUser.is_master === 1) {
+        container.querySelectorAll('.n3-card__delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteN3(btn.dataset.id);
+            });
+        });
     }
 }
 
@@ -307,7 +473,7 @@ function groupByDate(records) {
 //  RENDERIZAÇÃO DO CARD N3
 // ═══════════════════════════════════════════════════
 function renderN3Card(n3) {
-    const isAdm = currentUser.perfil === 'adm';
+    const isAdm = currentUser.perfil === 'adm' || currentUser.is_master === 1;
 
     // Foto limpa (sem badge sobre ela)
     const foto = n3.evidencia_1_path
@@ -373,7 +539,7 @@ async function openModal(id) {
 }
 
 async function renderModal(n3) {
-    const isAdm = currentUser.perfil === 'adm';
+    const isAdm = currentUser.perfil === 'adm' || currentUser.is_master === 1;
 
     // Buscar histórico
     let historicoHtml = '';
