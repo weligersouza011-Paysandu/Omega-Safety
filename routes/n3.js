@@ -60,6 +60,32 @@ function cleanText(value, fallback = '') {
     return text || fallback;
 }
 
+// Extrai a chave de um serviço SS (ex.: "SS_113/24 - ..." => "ss113/24"),
+// usada para relacionar o Local/SS da planilha aos canteiros/contratos.
+function ssCodeKey(value) {
+    const match = String(value == null ? '' : value)
+        .match(/SS[\s_-]*0*(\d{1,3})\s*[/\-]\s*(\d{2})/i);
+    return match ? `ss${Number(match[1])}/${match[2]}` : null;
+}
+
+function historicalUserMatricula(nome) {
+    const normalized = normalizeToken(nome).replace(/\s+/g, ' ').trim();
+    const hash = crypto.createHash('sha1').update(normalized).digest('hex');
+    return 'HIST-' + hash.slice(0, 10).toUpperCase();
+}
+
+function mostFrequentKey(counts) {
+    let best = null;
+    let bestCount = 0;
+    for (const [key, count] of counts || []) {
+        if (count > bestCount) {
+            best = key;
+            bestCount = count;
+        }
+    }
+    return best;
+}
+
 // Cria um leitor tolerante a pequenas variações nos cabeçalhos da planilha.
 function createRowReader(row) {
     const values = new Map();
@@ -315,7 +341,10 @@ router.post('/importar', requireAdm, uploadPlanilha.single('file'), async (req, 
     const isMaster = !!importador.is_master;
 
     try {
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+        // cellDates:false preserva matrículas numéricas como números (evita que
+        // o Excel as converta em datas) e mantém as datas como serial Excel,
+        // formato já tratado por spreadsheetDateToIso().
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false });
         const sheetName = workbook.SheetNames[0];
         const sheet = sheetName ? workbook.Sheets[sheetName] : null;
 
@@ -328,18 +357,64 @@ router.post('/importar', requireAdm, uploadPlanilha.single('file'), async (req, 
             return res.status(400).json({ error: 'A planilha fornecida está vazia.' });
         }
 
-        const usuarios = await db.allAsync(
-            'SELECT matricula, nome, lideranca, contrato FROM usuarios'
-        );
-        const userMap = new Map(
-            usuarios.map(u => [String(u.matricula).trim(), u])
+        const [usuariosIniciais, canteiros, contratosHistoricos] = await Promise.all([
+            db.allAsync('SELECT matricula, nome, lideranca, contrato FROM usuarios'),
+            db.allAsync('SELECT nome, contrato FROM vps_canteiros WHERE nome IS NOT NULL'),
+            db.allAsync(`
+                SELECT matricula, contrato, SUM(total) AS total FROM (
+                    SELECT matricula_observador AS matricula, contrato, 1 AS total
+                    FROM n3_registros
+                    WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                    UNION ALL
+                    SELECT matricula, contrato, 1 AS total
+                    FROM caderno_respostas
+                    WHERE contrato IS NOT NULL AND TRIM(contrato) != ''
+                ) evidencias
+                GROUP BY matricula, contrato
+            `),
+        ]);
+        let userMap = new Map(
+            usuariosIniciais.map(u => [String(u.matricula).trim(), u])
         );
 
+        // Relaciona Local/SS a contrato: primeiro por nome exato do canteiro,
+        // depois pela chave do serviço SS (ex.: SS_113/24 => ss113/24).
+        const canteiroExato = new Map();
+        const canteiroPorSs = new Map();
+        for (const canteiro of canteiros) {
+            const nomeCanteiro = cleanText(canteiro.nome);
+            const contratoCanteiro = cleanText(canteiro.contrato);
+            if (!nomeCanteiro || !contratoCanteiro) continue;
+            canteiroExato.set(nomeCanteiro, contratoCanteiro);
+            const chave = ssCodeKey(nomeCanteiro);
+            if (chave && !canteiroPorSs.has(chave)) {
+                canteiroPorSs.set(chave, contratoCanteiro);
+            }
+        }
+
+        // Contratos já registrados para a mesma matrícula em N3/inspeções.
+        const historicoContratoMap = new Map();
+        for (const item of contratosHistoricos) {
+            const matricula = String(item.matricula || '').trim();
+            const contrato = cleanText(item.contrato);
+            if (!matricula || !contrato) continue;
+            const counts = historicoContratoMap.get(matricula) || new Map();
+            counts.set(contrato, (counts.get(contrato) || 0) + Number(item.total || 1));
+            historicoContratoMap.set(matricula, counts);
+        }
+
+        const preparadas = [];
+        const evidenciasLocais = new Map();
+        const novosUsuarios = new Map();
         const registros = [];
         const erros = [];
         let linhasVazias = 0;
         let fotosIgnoradas = 0;
+        let usuariosCriados = 0;
 
+        // 1ª passada: resolve observador e contrato de cada linha e identifica
+        // usuários ausentes. A criação ocorre antes dos inserts de N3 para que
+        // a chave de relacionamento já exista.
         rawData.forEach((row, index) => {
             const linha = index + 2; // linha 1 = cabeçalho
 
@@ -354,34 +429,120 @@ router.post('/importar', requireAdm, uploadPlanilha.single('file'), async (req, 
 
             try {
                 const get = createRowReader(row);
-
                 const rawMatricula = cleanText(get('Matrícula', 'Matricula', 'matricula'));
                 const rawNome = cleanText(get('Nome (Observador)', 'Nome', 'Observador', 'nome_observador'));
+                const localSs = cleanText(get('Local/SS', 'Local', 'local_ss'));
 
-                // Usuário padrão: quem executa a importação. É usado sempre que a
-                // linha não permite identificar uma matrícula/nome coerente.
-                let matricula = rawMatricula || importador.matricula;
-                let usuario = userMap.get(matricula) || null;
-                let nome = rawNome;
-
-                if (!nome) {
-                    if (usuario) {
-                        nome = usuario.nome;
-                    } else {
-                        matricula = importador.matricula;
-                        usuario = userMap.get(matricula) || null;
-                        nome = usuario?.nome || importador.nome;
-                    }
+                // Sem matrícula, mas com nome: cria uma identidade histórica
+                // determinística para preservar o observador original.
+                let matricula = rawMatricula;
+                if (!matricula && rawNome) {
+                    matricula = historicalUserMatricula(rawNome);
                 }
 
-                let contrato = usuario?.contrato ? String(usuario.contrato).trim() : '';
-                if (!contrato) contrato = cleanText(get('Contrato', 'contrato'));
-                if (!contrato) contrato = importador.contrato || null;
-
-                // ADM comum só pode importar para o próprio contrato.
-                if (!isMaster) {
-                    contrato = importador.contrato ? String(importador.contrato).trim() : null;
+                // Sem matrícula nem nome: usa quem executa a importação.
+                if (!matricula) {
+                    matricula = String(importador.matricula).trim();
                 }
+
+                const usuario = userMap.get(matricula) || null;
+                const nome = rawNome || usuario?.nome || '';
+
+                // Evidência de contrato desta linha: nome exato do canteiro,
+                // chave SS ou coluna Contrato (quando existir na planilha).
+                let contratoLocal = canteiroExato.get(localSs) || '';
+                if (!contratoLocal) {
+                    const chave = ssCodeKey(localSs);
+                    if (chave) contratoLocal = canteiroPorSs.get(chave) || '';
+                }
+                if (!contratoLocal) contratoLocal = cleanText(get('Contrato', 'contrato'));
+
+                if (contratoLocal) {
+                    const counts = evidenciasLocais.get(matricula) || new Map();
+                    counts.set(contratoLocal, (counts.get(contratoLocal) || 0) + 1);
+                    evidenciasLocais.set(matricula, counts);
+                }
+
+                if (!usuario && !novosUsuarios.has(matricula)) {
+                    novosUsuarios.set(matricula, {
+                        matricula,
+                        nome: (nome || `Observador histórico ${matricula}`).slice(0, 255),
+                        contrato: null,
+                        lideranca: cleanText(get('Liderança', 'Lideranca', 'lideranca')) || null,
+                    });
+                }
+
+                preparadas.push({ row, linha, matricula, nome, contrato: null });
+            } catch (rowErr) {
+                if (erros.length < 100) {
+                    erros.push({ linha, motivo: rowErr.message });
+                }
+            }
+        });
+
+        // Contrato por observador: prioriza o contrato já cadastrado no usuário,
+        // depois o histórico em N3/inspeções e, por fim, a evidência de Local/SS
+        // das próprias linhas. O mesmo contrato vale para todas as linhas da
+        // pessoa, evitando registros órfãos quando só parte dos locais casa.
+        const contratoPorIdentidade = new Map();
+        for (const preparada of preparadas) {
+            if (contratoPorIdentidade.has(preparada.matricula)) continue;
+
+            const usuario = userMap.get(preparada.matricula);
+            let contrato = usuario?.contrato ? String(usuario.contrato).trim() : '';
+            if (!contrato) {
+                contrato = mostFrequentKey(historicoContratoMap.get(preparada.matricula)) || '';
+            }
+            if (!contrato) {
+                contrato = mostFrequentKey(evidenciasLocais.get(preparada.matricula)) || '';
+            }
+
+            // ADM comum só pode importar para o próprio contrato.
+            if (!isMaster) {
+                contrato = importador.contrato ? String(importador.contrato).trim() : '';
+            }
+
+            contratoPorIdentidade.set(preparada.matricula, contrato || null);
+        }
+
+        for (const preparada of preparadas) {
+            preparada.contrato = contratoPorIdentidade.get(preparada.matricula) || null;
+        }
+        for (const novo of novosUsuarios.values()) {
+            novo.contrato = contratoPorIdentidade.get(novo.matricula) || null;
+        }
+
+        if (novosUsuarios.size) {
+            await db.withTransaction(async (tx) => {
+                for (const novo of novosUsuarios.values()) {
+                    const result = await tx.runAsync(
+                        `INSERT INTO usuarios
+                            (matricula, nome, funcao, perfil, contrato, senha_hash, ativo, is_lideranca, is_master)
+                         VALUES (?, ?, ?, 'operacional', ?, NULL, 1, 0, 0)
+                         ON CONFLICT (matricula) DO NOTHING`,
+                        [novo.matricula, novo.nome, 'Importado (histórico N3)', novo.contrato]
+                    );
+                    usuariosCriados += result.changes || 0;
+                }
+            });
+
+            const usuariosAtualizados = await db.allAsync(
+                'SELECT matricula, nome, lideranca, contrato FROM usuarios'
+            );
+            userMap = new Map(
+                usuariosAtualizados.map(u => [String(u.matricula).trim(), u])
+            );
+        }
+
+        // 2ª passada: monta os registros N3 com os dados já normalizados.
+        for (const preparada of preparadas) {
+            const { row, linha, matricula } = preparada;
+            try {
+                const get = createRowReader(row);
+                const usuario = userMap.get(matricula) || null;
+                const nome = preparada.nome || usuario?.nome || importador.nome;
+                const contrato = preparada.contrato ||
+                    (usuario?.contrato ? String(usuario.contrato).trim() : null);
 
                 const rawEv1 = get('Evidência 1 (Foto do Forms)', 'Evidencia 1 (Foto do Forms)', 'Evidência 1', 'Evidencia 1');
                 const rawEv2 = get('Evidência 2 (Foto)', 'Evidencia 2 (Foto)', 'Evidência 2', 'Evidencia 2');
@@ -438,7 +599,7 @@ router.post('/importar', requireAdm, uploadPlanilha.single('file'), async (req, 
                     erros.push({ linha, motivo: rowErr.message });
                 }
             }
-        });
+        }
 
         if (!registros.length) {
             return res.status(422).json({
@@ -484,11 +645,13 @@ router.post('/importar', requireAdm, uploadPlanilha.single('file'), async (req, 
             success: true,
             message: `${inseridos} registro(s) importado(s) com sucesso.` +
                 (ignorados > 0 ? ` ${ignorados} registro(s) já existente(s) ignorado(s).` : '') +
+                (usuariosCriados > 0 ? ` ${usuariosCriados} usuário(s) criado(s).` : '') +
                 (fotosIgnoradas > 0 ? ` ${fotosIgnoradas} referência(s) de foto local foram descartadas.` : ''),
             total_processados: rawData.length,
             registros_validos: registros.length,
             inseridos,
             ignorados,
+            usuarios_criados: usuariosCriados,
             linhas_vazias: linhasVazias,
             fotos_ignoradas: fotosIgnoradas,
             erros,
