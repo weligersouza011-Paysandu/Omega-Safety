@@ -14,6 +14,15 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ────────────────────────────────────────────────
+//  Ping (cron externo / Render)
+//  Responder antes de sessão, banco e arquivos estáticos.
+// ────────────────────────────────────────────────
+app.get('/ping', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.status(200).type('text/plain').send('pong');
+});
+
+// ────────────────────────────────────────────────
 //  Middlewares globais
 // ────────────────────────────────────────────────
 app.use(cors({ origin: true, credentials: true }));
@@ -184,6 +193,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🟢 Omega Safety rodando em http://localhost:${PORT}`);
     console.log(`   Acesso na rede: http://<seu-ip>:${PORT}`);
     console.log(`   ADM padrão: matrícula 1998 / senha 1234`);
+    console.log(`   Ping: http://localhost:${PORT}/ping`);
     console.log(`   Healthcheck: http://localhost:${PORT}/api/health\n`);
 });
 
