@@ -6,7 +6,6 @@ let currentContrato = '';
 let currentPeriod   = '7d';
 let allN3Data       = [];
 let n3ListState     = { loading: false, hasMore: false, hasHistorico: false, total: 0, totalSemPeriodo: 0 };
-let n3Importing     = false;
 let n3RequestSeq    = 0;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -39,18 +38,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Filtros de Status ──
     setupStatusFilters();
 
-    // ── Período / histórico e importação (ADM) ──
+    // ── Período / histórico (ADM) ──
     setupPeriodFilter();
-    setupN3Import(isAdm);
 
     // ── Carregar N3 ──
     loadN3();
 
     if (typeof window.onGlobalChange === 'function') {
         window.onGlobalChange(async () => {
-            // Durante a importação o recarregamento é controlado manualmente,
-            // para já abrir o histórico em vez de recarregar os últimos 7 dias.
-            if (n3Importing) return;
             if (typeof loadN3 === 'function') {
                 loadN3();
             }
@@ -240,57 +235,6 @@ function updateN3LoadMore() {
         hint.textContent = `${allN3Data.length} de ${n3ListState.total} carregado(s)` +
             (n3ListState.hasHistorico ? ` · ${n3ListState.totalSemPeriodo} no histórico total` : '');
     }
-}
-
-// ═══════════════════════════════════════════════════
-//  IMPORTAÇÃO DE PLANILHA (ADM)
-// ═══════════════════════════════════════════════════
-function setupN3Import(isAdm) {
-    const btn = document.getElementById('btn-importar-n3');
-    const input = document.getElementById('input-importar-n3');
-    if (!btn || !input || !isAdm) return;
-
-    btn.style.display = 'inline-flex';
-    btn.addEventListener('click', () => input.click());
-    input.addEventListener('change', async () => {
-        const file = input.files && input.files[0];
-        if (!file) return;
-
-        const textoOriginal = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '⏳ Importando...';
-        n3Importing = true;
-
-        let importou = false;
-
-        try {
-            const form = new FormData();
-            form.append('file', file);
-            const resp = await api.upload('/n3/importar', form);
-
-            let msg = resp.message || 'Planilha importada.';
-            if (resp.erros && resp.erros.length) {
-                msg += ` ${resp.erros.length} linha(s) com erro.`;
-            }
-            showToast(msg, resp.inseridos > 0 ? 'success' : 'warning', 9000);
-            importou = true;
-        } catch (err) {
-            showToast(err.message || 'Erro ao importar planilha.', 'error', 9000);
-        } finally {
-            n3Importing = false;
-            input.value = '';
-            btn.disabled = false;
-            btn.textContent = textoOriginal;
-        }
-
-        if (importou) {
-            // Abre o histórico para o usuário conferir o que entrou.
-            currentPeriod = 'all';
-            const select = document.getElementById('select-periodo-n3');
-            if (select) select.value = 'all';
-            loadN3();
-        }
-    });
 }
 
 // ═══════════════════════════════════════════════════
