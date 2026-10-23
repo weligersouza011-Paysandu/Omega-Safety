@@ -665,110 +665,168 @@ function renderDashboardCharts(stats) {
     document.getElementById('card-total-adm').textContent = totalAdm;
     document.getElementById('card-total-op').textContent = totalOp;
 
-    // 2. Gráfico de Rosca (Distribuição de Contratos em %)
+    // ── Paleta vibrante de 20 cores distintas ──────────────────────────────
+    // Cores curadas para máximo contraste visual entre si (dark-mode-friendly)
+    const VIBRANT_PALETTE = [
+        '#3B82F6', // Azul Vivo
+        '#10B981', // Esmeralda
+        '#F59E0B', // Âmbar
+        '#EF4444', // Vermelho
+        '#8B5CF6', // Violeta
+        '#06B6D4', // Ciano
+        '#F97316', // Laranja
+        '#84CC16', // Lima
+        '#EC4899', // Rosa
+        '#14B8A6', // Teal
+        '#A855F7', // Púrpura
+        '#EAB308', // Amarelo
+        '#22C55E', // Verde
+        '#F43F5E', // Rosa Avermelhado
+        '#0EA5E9', // Azul Céu
+        '#D97706', // Âmbar Escuro
+        '#7C3AED', // Índigo
+        '#059669', // Verde Escuro
+        '#DC2626', // Vermelho Escuro
+        '#2563EB', // Azul Royal
+    ];
+
+    /**
+     * Atribui uma cor da paleta a um contrato de forma determinística.
+     * Baseia-se em um hash simples do rótulo — garante que o mesmo
+     * contrato sempre receba a mesma cor, mesmo se a ordem mudar.
+     */
+    function hashColorForLabel(label) {
+        let hash = 0;
+        for (let i = 0; i < label.length; i++) {
+            hash = (hash * 31 + label.charCodeAt(i)) >>> 0; // unsigned 32-bit
+        }
+        return VIBRANT_PALETTE[hash % VIBRANT_PALETTE.length];
+    }
+
+    // Monta o array de labels uma única vez — compartilhado entre os dois gráficos
+    const contratoLabels = stats.contratos.map(c =>
+        c.contrato ? `Contrato ${c.contrato}` : 'Sem Contrato'
+    );
+
+    // Gera as cores determinísticas para cada contrato
+    const contratoColors = contratoLabels.map(label => hashColorForLabel(label));
+
+    // ── 2. Gráfico de Rosca — Distribuição por Contrato (%) ──────────────
     const ctxDonut = document.getElementById('chartDonut').getContext('2d');
     if (chartDonutInstance) chartDonutInstance.destroy();
 
-    // Calcula total operacional para obter a porcentagem
     const totalContratosQtd = stats.contratos.reduce((sum, c) => sum + c.qtd, 0);
-    const percentagesData = stats.contratos.map(c => totalContratosQtd > 0 ? parseFloat(((c.qtd / totalContratosQtd) * 100).toFixed(1)) : 0);
-
-    // Prepara paleta de cores elegantes baseadas em vermelho/vinho
-    const colorPalette = [
-        '#8B1C31', // Vermelho Vinho (Principal)
-        '#A6223B', // Vermelho Mais Claro
-        '#C8102E', // Vermelho Rubi
-        '#E11D48', // Rosa Escuro
-        '#FB7185', // Rosa Médio
-        '#FDA4AF', // Rosa Claro
-        '#FECDD3', // Rosa Suave
-        '#FFE4E6'  // Rosa Bem Suave
-    ];
+    const percentagesData = stats.contratos.map(c =>
+        totalContratosQtd > 0 ? parseFloat(((c.qtd / totalContratosQtd) * 100).toFixed(1)) : 0
+    );
 
     chartDonutInstance = new Chart(ctxDonut, {
         type: 'doughnut',
         data: {
-            labels: stats.contratos.map(c => c.contrato ? `Contrato ${c.contrato}` : 'Sem Contrato'),
+            labels: contratoLabels,
             datasets: [{
                 data: percentagesData,
-                backgroundColor: colorPalette.slice(0, stats.contratos.length || 1),
-                borderWidth: 1,
-                borderColor: '#1e1e1e'
+                backgroundColor: contratoColors,
+                hoverBackgroundColor: contratoColors.map(c => c + 'DD'), // leve escurecimento no hover
+                borderWidth: 2,
+                borderColor: '#111827',
             }]
         },
         options: {
             responsive: true,
+            cutout: '62%',
             plugins: {
-                legend: { position: 'bottom', labels: { color: '#ccc' } },
-                datalabels: {
-                    display: true,
-                    color: '#fff',
-                    font: {
-                        weight: 'bold',
-                        size: 11
-                    },
-                    formatter: (value) => {
-                        return value + '%';
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#d1d5db',
+                        padding: 14,
+                        boxWidth: 14,
+                        font: { size: 12, family: 'Inter, sans-serif' },
+                        usePointStyle: true,
+                        pointStyleWidth: 10,
                     }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%`
+                    }
+                },
+                datalabels: {
+                    display: ctx => ctx.dataset.data[ctx.dataIndex] >= 3, // oculta fatias muito pequenas
+                    color: '#ffffff',
+                    font: { weight: 'bold', size: 11, family: 'Inter, sans-serif' },
+                    textShadowColor: 'rgba(0,0,0,0.5)',
+                    textShadowBlur: 4,
+                    formatter: value => value + '%',
                 }
             }
         }
     });
 
-    // 3. Gráfico de Barras (Contratos)
+    // ── 3. Gráfico de Barras — Volume por Contrato ───────────────────────
     const ctxBar = document.getElementById('chartBar').getContext('2d');
     if (chartBarInstance) chartBarInstance.destroy();
 
-    // Define a largura dinâmica do wrapper para evitar deformaçao
+    // Largura dinâmica para evitar deformação com muitos contratos
     const numContracts = stats.contratos.length;
-    const minWidth = Math.max(300, numContracts * 45); // 45px por contrato
+    const minWidth = Math.max(320, numContracts * 56);
     const barWrapper = document.getElementById('chart-bar-wrapper');
-    if (barWrapper) {
-        barWrapper.style.minWidth = `${minWidth}px`;
-    }
+    if (barWrapper) barWrapper.style.minWidth = `${minWidth}px`;
 
     const maxVal = Math.max(...stats.contratos.map(c => c.qtd)) || 0;
 
     chartBarInstance = new Chart(ctxBar, {
         type: 'bar',
         data: {
-            labels: stats.contratos.map(c => c.contrato ? `Contrato ${c.contrato}` : 'Sem Contrato'),
+            labels: contratoLabels,
             datasets: [{
-                label: 'Usuários',
+                label: 'Usuários Ativos',
                 data: stats.contratos.map(c => c.qtd),
-                backgroundColor: '#8B1C31',
-                borderRadius: 4
+                backgroundColor: contratoColors,          // mesmas cores do donut
+                hoverBackgroundColor: contratoColors.map(c => c + 'CC'),
+                borderRadius: 6,
+                borderSkipped: false,
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: { 
-                    beginAtZero: true, 
-                    grid: { display: false, drawBorder: false }, 
+                y: {
+                    beginAtZero: true,
+                    grid: { display: false, drawBorder: false },
                     ticks: { display: false },
-                    suggestedMax: Math.ceil(maxVal * 1.15) || 5
+                    suggestedMax: Math.ceil(maxVal * 1.2) || 5,
                 },
-                x: { grid: { display: false }, ticks: { color: '#ccc' } }
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#d1d5db',
+                        font: { size: 11, family: 'Inter, sans-serif' },
+                    }
+                }
             },
             plugins: {
-                legend: { display: false },
+                legend: { display: false },  // donut já tem legenda completa
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.parsed.y} usuário(s)`
+                    }
+                },
                 datalabels: {
                     display: true,
                     anchor: 'end',
                     align: 'top',
-                    color: '#ccc',
-                    font: {
-                        weight: 'bold',
-                        size: 11
-                    },
-                    formatter: (value) => value
+                    color: '#f9fafb',
+                    font: { weight: 'bold', size: 12, family: 'Inter, sans-serif' },
+                    formatter: value => value,
                 }
             }
         }
     });
 }
+
 
 // Configura o seletor interno de adicionar novos usuários (Operacional vs ADM)
 function setupAddUserSelector() {
