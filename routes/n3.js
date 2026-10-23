@@ -228,6 +228,19 @@ router.get('/locais', requireAuth, async (req, res) => {
     }
 });
 
+// GET /api/n3/usuarios-ativos — nomes e matrículas de usuários com ativo = 1
+// Usado pelo treemap para filtrar e exibir apenas usuários ativos.
+router.get('/usuarios-ativos', requireAuth, async (req, res) => {
+    try {
+        const rows = await db.allAsync(
+            `SELECT matricula, nome FROM usuarios WHERE ativo = 1 ORDER BY nome ASC`
+        );
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET /api/n3
 // Por padrão retorna apenas os últimos 7 dias. O histórico completo é carregado
 // sob demanda com periodo=all (ou data_inicio/data_fim) + offset/limit.

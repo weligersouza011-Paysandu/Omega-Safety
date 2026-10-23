@@ -904,7 +904,8 @@ function renderChartSubcategorias(records) {
                 data:            values,
                 backgroundColor: bgColors,
                 borderColor:     'transparent',
-                borderRadius:    3,
+                borderRadius:    4,
+                barThickness:    20,
             }],
         },
         options: {
@@ -917,19 +918,27 @@ function renderChartSubcategorias(records) {
                     toggleCrossFilter('subcategoria', labels[idx], isCtrl);
                 }
             },
-            layout: { padding: { right: 40 } },
+            layout: { padding: { right: 54 } },
             plugins: {
                 ...CHART_DEFAULTS.plugins,
                 datalabels: {
-                    display: true, anchor: 'end', align: 'end', clip: false,
-                    color: '#f0f0f0', font: { size: 11, weight: '700' },
-                    padding: { left: 4 },
+                    display: true,
+                    anchor:  'end',
+                    align:   'end',
+                    clip:    false,
+                    color:   '#f0f0f0',
+                    font:    { size: 13, weight: '700', family: 'Inter, sans-serif' },
+                    padding: { left: 6 },
                     formatter: v => v,
                 },
             },
             scales: {
                 x: { beginAtZero: true, grid: NO_GRID, ticks: { display: false }, border: { display: false } },
-                y: { grid: NO_GRID, border: { display: false }, ticks: { color: '#e5e7eb', font: { size: 10 }, padding: 6 } },
+                y: {
+                    grid:   NO_GRID,
+                    border: { display: false },
+                    ticks:  { color: '#e5e7eb', font: { size: 13, family: 'Inter, sans-serif' }, padding: 8 },
+                },
             },
         },
         plugins: DL_PLUGIN(),
@@ -1102,7 +1111,8 @@ function renderChartPendentes(records) {
         borderColor: 'transparent',
         borderRadius: 2,
         stack: 'stack',
-        data: labels.map(loc => 
+        barThickness: 22,
+        data: labels.map(loc =>
             records.filter(r => (r.local_ss || 'Não informado') === loc && def.match(r)).length
         )
     }));
@@ -1125,18 +1135,23 @@ function renderChartPendentes(records) {
                 legend: {
                     display: nivelsSeries.length > 1,
                     position: 'top',
-                    labels: { color: '#a0a0a0', boxWidth: 12, font: { size: 11 } },
+                    labels: { color: '#a0a0a0', boxWidth: 14, font: { size: 12 } },
                 },
                 datalabels: {
                     display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
                     color: '#fff',
-                    font: { size: 10, weight: '700' },
+                    font: { size: 11, weight: '700', family: 'Inter, sans-serif' },
                     formatter: v => v > 0 ? v : '',
                 },
             },
             scales: {
                 x: { stacked: true, grace: '15%', grid: NO_GRID, border: { display: false }, ticks: { display: false } },
-                y: { stacked: true, grid: NO_GRID, border: { display: false }, ticks: { color: '#e5e7eb', font: { size: 11 } } },
+                y: {
+                    stacked: true,
+                    grid:    NO_GRID,
+                    border:  { display: false },
+                    ticks:   { color: '#e5e7eb', font: { size: 13, family: 'Inter, sans-serif' }, padding: 8 },
+                },
             },
         },
         plugins: [...DL_PLUGIN(), {
@@ -1158,10 +1173,10 @@ function renderChartPendentes(records) {
                     }
                     if (total > 0 && lastValidMeta) {
                         ctx.fillStyle = '#ffffff';
-                        ctx.font = 'bold 12px Inter, sans-serif';
+                        ctx.font = 'bold 14px Inter, sans-serif';
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';
-                        ctx.fillText(total, lastValidMeta.x + 6, lastValidMeta.y);
+                        ctx.fillText(total, lastValidMeta.x + 8, lastValidMeta.y);
                     }
                 });
             }
@@ -1170,11 +1185,40 @@ function renderChartPendentes(records) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  GRÁFICO 5 — Treemap: Registros por Usuário
+//  GRÁFICO 5 — Treemap: Registros por Usuário (apenas ATIVOS)
 // ══════════════════════════════════════════════════════════════
 let treemapBoxes          = [];
 let treemapHoveredIndex   = -1;
 let treemapResizeObserver = null;
+
+// Cache dos usuários ativos — carregado uma vez por sessão de dashboard
+let _usuariosAtivosSet = null; // Set<string> de nomes em lower-case
+let _usuariosAtivosLoaded = false;
+
+async function getUsuariosAtivosSet() {
+    if (_usuariosAtivosLoaded) return _usuariosAtivosSet;
+    try {
+        const rows = await api.get('/n3/usuarios-ativos');
+        if (Array.isArray(rows) && rows.length > 0) {
+            _usuariosAtivosSet = new Set(
+                rows.map(u => String(u.nome || '').trim().toLowerCase())
+            );
+        } else {
+            // Fallback: exibe todos se a lista vier vazia (ex: conta dev)
+            _usuariosAtivosSet = null;
+        }
+    } catch (_) {
+        _usuariosAtivosSet = null; // Fail gracefully: mostra todos
+    }
+    _usuariosAtivosLoaded = true;
+    return _usuariosAtivosSet;
+}
+
+// Reseta o cache ao recarregar o dashboard (ex: alterações de usuários)
+function resetUsuariosAtivosCache() {
+    _usuariosAtivosSet = null;
+    _usuariosAtivosLoaded = false;
+}
 
 const TREEMAP_PALETTE = [
     '#0284c7', // Sky Blue
@@ -1191,14 +1235,23 @@ const TREEMAP_PALETTE = [
     '#16a34a'  // Vivid Green
 ];
 
-function renderTreemapUsuarios(records) {
+async function renderTreemapUsuarios(records) {
     const canvas    = document.getElementById('chartTreemapUsuarios');
     const container = document.getElementById('treemap-container');
     if (!canvas || !container) return;
 
+    // 0. Filtrar apenas usuários ATIVOS (por nome, case-insensitive)
+    const ativosSet = await getUsuariosAtivosSet();
+    const filteredRecords = ativosSet
+        ? records.filter(r => {
+              const nome = String(r.nome_observador || r.usuario || '').trim().toLowerCase();
+              return ativosSet.has(nome);
+          })
+        : records; // Fallback: usa todos se não foi possível carregar
+
     // 1. Agrupar registros por Usuário (nome_observador)
     const mapUsuarios = {};
-    records.forEach(r => {
+    filteredRecords.forEach(r => {
         const u = r.nome_observador || r.usuario || 'Não informado';
         if (!mapUsuarios[u]) {
             mapUsuarios[u] = {
@@ -1223,7 +1276,7 @@ function renderTreemapUsuarios(records) {
     // 2. Ajustar dimensões Canvas com High DPI support
     const rect   = container.getBoundingClientRect();
     const width  = Math.floor(rect.width || container.clientWidth || 800);
-    const height = Math.floor(rect.height || container.clientHeight || 380);
+    const height = Math.floor(rect.height || container.clientHeight || 520);
 
     const dpr = window.devicePixelRatio || 1;
     canvas.width  = width * dpr;
